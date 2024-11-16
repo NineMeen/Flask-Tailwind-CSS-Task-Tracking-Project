@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto py-8 px-4">
+    <div class="bg-white shadow-md rounded-lg p-6">
+        <h2 class="text-2xl font-bold text-gray-900 mb-6">Create New Migration Request</h2>
+
+        <form action="{{ url_for('create_migration') }}" method="POST" enctype="multipart/form-data" class="space-y-6">
+            <!-- Title -->
+            <div>
+                <label for="title" class="block text-sm font-medium text-gray-700">Migration Title</label>
+                <input type="text" name="title" id="title" required
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+            </div>
+
+            <!-- Customer Information -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="customer_name" class="block text-sm font-medium text-gray-700">Customer Name</label>
+                    <input type="text" name="customer_name" id="customer_name" required
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label for="customer_contact" class="block text-sm font-medium text-gray-700">Customer Contact</label>
+                    <input type="text" name="customer_contact" id="customer_contact" required
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        placeholder="Email or Phone">
+                </div>
+            </div>
+
+            <!-- Migration Details -->
+            <div>
+                <label for="description" class="block text-sm font-medium text-gray-700">Migration Details</label>
+                <textarea name="description" id="description" rows="5" required
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    placeholder="Please provide detailed information about the migration requirements..."></textarea>
+            </div>
+
+            <!-- File Upload Section -->
+            <div class="space-y-4">
+                <label class="block text-sm font-medium text-gray-700">Supporting Documents</label>
+                <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
+                    <div class="space-y-1 text-center">
+                        <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                            <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" 
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                        <div class="flex text-sm text-gray-600">
+                            <label for="files" class="relative cursor-pointer rounded-md font-medium text-blue-600 hover:text-blue-500">
+                                <span>Upload files</span>
+                                <input type="file" id="files" name="files[]" class="sr-only" multiple accept=".pdf,.doc,.docx,.xls,.xlsx">
+                            </label>
+                            <p class="pl-1">or drag and drop</p>
+                        </div>
+                        <p class="text-xs text-gray-500">PDF, DOC, DOCX, XLS, XLSX up to 10MB each</p>
+                        <!-- Preview selected files -->
+                        <div id="fileList" class="mt-4 text-left"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Additional Notes -->
+            <div>
+                <label for="notes" class="block text-sm font-medium text-gray-700">Additional Notes</label>
+                <textarea name="notes" id="notes" rows="3"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    placeholder="Any additional information..."></textarea>
+            </div>
+
+            <!-- Submit Buttons -->
+            <div class="flex justify-end space-x-3">
+                <a href="{{ url_for('index') }}"
+                    class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">
+                    Cancel
+                </a>
+                <button type="submit"
+                    class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    Create Migration Request
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Add this JavaScript to show selected files -->
+<script>
+    document.getElementById('files').addEventListener('change', function(e) {
+        const fileList = document.getElementById('fileList');
+        fileList.innerHTML = '';
+        
+        if (this.files.length > 20) {
+            alert('You can only upload up to 20 files at once');
+            this.value = '';
+            return;
+        }
+    
+        Array.from(this.files).forEach(file => {
+            const fileSize = (file.size / 1024 / 1024).toFixed(2); // Convert to MB
+            const div = document.createElement('div');
+            div.className = 'text-sm py-1';
+            div.innerHTML = `
+                <span class="text-gray-700">${file.name}</span>
+                <span class="text-gray-500 text-xs">(${fileSize} MB)</span>
+            `;
+            fileList.appendChild(div);
+        });
+    });
+    </script>
+{% endblock %}
