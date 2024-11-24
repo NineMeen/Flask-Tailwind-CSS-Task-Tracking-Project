@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="flex justify-between items-center mb-8">
+        <h1 class="text-3xl font-bold text-gray-800">SA Team Dashboard</h1>
+        <div class="text-sm text-gray-600">
+            Welcome, {{ current_user.username }}
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- Team Members Section -->
+        <div class="lg:col-span-1">
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-xl font-semibold mb-4 text-gray-700">Team Members</h2>
+                <div class="space-y-4">
+                    {% for member in team_members %}
+                    <div class="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded">
+                        <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                            <span class="text-white font-medium">{{ member.username[0].upper() }}</span>
+                        </div>
+                        <div>
+                            <p class="font-medium text-gray-800">{{ member.username }}</p>
+                            <p class="text-sm text-gray-500">{{ member.email }}</p>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Tasks Section -->
+        <div class="lg:col-span-2">
+            <div class="bg-white rounded-lg shadow">
+                <div class="p-6">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-700">Active Tasks</h2>
+                    
+                    {% if migrations %}
+                    <div class="space-y-4">
+                        {% for migration in migrations %}
+                        <div class="border rounded-lg p-4 hover:shadow-md transition-shadow">
+                            <div class="flex justify-between items-start mb-2">
+                                <h3 class="text-lg font-medium text-gray-800">{{ migration.title }}</h3>
+                                <span class="px-3 py-1 rounded-full text-sm 
+                                    {% if migration.status == 'waiting' %}
+                                        bg-yellow-100 text-yellow-800
+                                    {% elif migration.status == 'in_progress' %}
+                                        bg-blue-100 text-blue-800
+                                    {% elif migration.status == 'completed' %}
+                                        bg-green-100 text-green-800
+                                    {% endif %}">
+                                    {{ migration.status.replace('_', ' ').title() }}
+                                </span>
+                            </div>
+                            <p class="text-gray-600 mb-3">{{ migration.description }}</p>
+                            <div class="flex justify-between items-center text-sm text-gray-500">
+                                <div>
+                                    Customer: {{ migration.customer_name }}
+                                </div>
+                                <div>
+                                    Created: {{ migration.created_at.strftime('%Y-%m-%d') }}
+                                </div>
+                                <a href="{{ url_for('view_migration', id=migration.id) }}" 
+                                   class="text-blue-600 hover:text-blue-800">
+                                    View Details →
+                                </a>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-8 text-gray-500">
+                        <p>No active tasks at the moment.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

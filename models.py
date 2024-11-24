@@ -51,3 +51,12 @@ class MigrationLog(db.Model):
     action = db.Column(db.String(100), nullable=False)
     timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     details = db.Column(db.Text)
+
+# Add notification model
+class Notification(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    message = db.Column(db.String(200))
+    read = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    migration_id = db.Column(db.Integer, db.ForeignKey('migration.id'))

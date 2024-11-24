@@ -72,41 +72,75 @@
                         {% endif %}
                     </dd>
                 </div>
+        <!-- Split into two separate sections -->
+        <!-- Attachments Section -->
+        <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+            <dt class="text-sm font-medium text-gray-500">Attachments</dt>
+            <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                <ul class="border border-gray-200 rounded-md divide-y divide-gray-200">
+                    {% for file in migration_files %}
+                    {% if file.file_type == 'attachment' %}
+                    <li class="pl-3 pr-4 py-3 flex items-center justify-between text-sm">
+                        <div class="w-0 flex-1 flex items-center">
+                            <svg class="flex-shrink-0 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clip-rule="evenodd" />
+                            </svg>
+                            <div class="ml-2 flex-1">
+                                <div class="truncate">{{ file.filename }}</div>
+                                <div class="text-xs text-gray-500">
+                                    Uploaded: {{ file.uploaded_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="ml-4 flex-shrink-0 space-x-2">
+                            <a href="{{ url_for('view_file', file_id=file.id) }}" target="_blank" 
+                            class="font-medium text-blue-600 hover:text-blue-500">View</a>
+                            <a href="{{ url_for('download_file', file_id=file.id) }}" 
+                            class="font-medium text-indigo-600 hover:text-indigo-500">Download</a>
+                        </div>
+                    </li>
+                    {% endif %}
+                    {% endfor %}
+                </ul>
+            </dd>
+        </div>
 
-       <!-- Updated Attachments Section -->
-       <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-        <dt class="text-sm font-medium text-gray-500">Attachments</dt>
-        <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-            <ul class="border border-gray-200 rounded-md divide-y divide-gray-200">
-                {% for file in migration_files %}
-                <li class="pl-3 pr-4 py-3 flex items-center justify-between text-sm">
-                    <div class="w-0 flex-1 flex items-center">
-                        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clip-rule="evenodd" />
-                        </svg>
-                        <div class="ml-2 flex-1">
-                            <div class="truncate">{{ file.filename }}</div>
-                            <div class="text-xs text-gray-500">
-                                Uploaded: {{ file.uploaded_at.strftime('%Y-%m-%d %H:%M:%S') }}
-                                {% if file.file_type == 'result' %}
+        <!-- Result Files Section -->
+        <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+            <dt class="text-sm font-medium text-gray-500">Result Files</dt>
+            <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                <ul class="border border-gray-200 rounded-md divide-y divide-gray-200">
+                    {% for file in migration_files %}
+                    {% if file.file_type == 'result' %}
+                    <li class="pl-3 pr-4 py-3 flex items-center justify-between text-sm">
+                        <div class="w-0 flex-1 flex items-center">
+                            <svg class="flex-shrink-0 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clip-rule="evenodd" />
+                            </svg>
+                            <div class="ml-2 flex-1">
+                                <div class="truncate">{{ file.filename }}</div>
+                                <div class="text-xs text-gray-500">
+                                    Uploaded: {{ file.uploaded_at.strftime('%Y-%m-%d %H:%M:%S') }}
                                     <span class="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
                                         Result File
                                     </span>
-                                {% endif %}
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div class="ml-4 flex-shrink-0 space-x-2">
-                        <a href="{{ url_for('view_file', file_id=file.id) }}" target="_blank" 
-                           class="font-medium text-blue-600 hover:text-blue-500">View</a>
-                        <a href="{{ url_for('download_file', file_id=file.id) }}" 
-                           class="font-medium text-indigo-600 hover:text-indigo-500">Download</a>
-                    </div>
-                </li>
-                {% endfor %}
-            </ul>
-        </dd>
-    </div>
+                        <div class="ml-4 flex-shrink-0 space-x-2">
+                            <a href="{{ url_for('view_file', file_id=file.id) }}" target="_blank" 
+                            class="font-medium text-blue-600 hover:text-blue-500">View</a>
+                            <a href="{{ url_for('download_file', file_id=file.id) }}" 
+                            class="font-medium text-indigo-600 hover:text-indigo-500">Download</a>
+                        </div>
+                    </li>
+                    {% endif %}
+                    {% endfor %}
+                </ul>
+            </dd>
+        </div>
+
+
 </dl>
 </div>
 

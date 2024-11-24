@@ -1,101 +1,82 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Migration Tracker</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='dist/main.css') }}">
-</head>
-<body class="bg-gray-100">
-    <nav class="bg-white shadow-lg">
-        <div class="max-w-7xl mx-auto px-4">
-            <div class="flex justify-between h-16">
-                <div class="flex">
-                    <div class="flex-shrink-0 flex items-center">
-                        <h1 class="text-xl font-bold">Migration Tracker</h1>
-                    </div>
+<div class="container mx-auto px-4 py-8">
+    <!-- Search Section -->
+    <div class="mb-8">
+        <div class="max-w-xl mx-auto">
+            <form action="{{ url_for('dashboard') }}" method="GET" class="flex gap-4">
+                <div class="flex-1">
+                    <input type="text" 
+                           name="search" 
+                           value="{{ request.args.get('search', '') }}"
+                           placeholder="Search by title or customer name..." 
+                           class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
                 </div>
-            </div>
+                <select name="status" 
+                        class="px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">All Status</option>
+                    <option value="completed" {% if request.args.get('status') == 'completed' %}selected{% endif %}>Completed</option>
+                    <option value="rollback" {% if request.args.get('status') == 'rollback' %}selected{% endif %}>Rollback</option>
+                </select>
+                <button type="submit" 
+                        class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    Search
+                </button>
+            </form>
         </div>
-    </nav>
+    </div>
 
-    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="mb-4 p-4 rounded-md {{ 'bg-green-100 text-green-700' if category == 'success' else 'bg-red-100 text-red-700' }}">
-                        {{ message }}
-                    </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-
-        {% if current_user.team.name == 'SD' or current_user.is_admin %}
-            <div class="mb-6">
-                <a href="{{ url_for('create_migration') }}" 
-                   class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-                    Create New Migration
-                </a>
-            </div>
-        {% endif %}
-
-        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created By</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
-                    {% for migration in migrations %}
+    <!-- Results Table - Only show if search was performed -->
+    {% if request.args.get('search') or request.args.get('status') %}
+        {% if migrations %}
+            <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Completed At</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {% for migration in migrations %}
                         <tr>
                             <td class="px-6 py-4 whitespace-nowrap">{{ migration.title }}</td>
                             <td class="px-6 py-4 whitespace-nowrap">{{ migration.customer_name }}</td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                                    {% if migration.status == 'waiting' %}
-                                        bg-yellow-100 text-yellow-800
-                                    {% elif migration.status == 'acknowledged' %}
-                                        bg-blue-100 text-blue-800
-                                    {% elif migration.status == 'in_progress' %}
-                                        bg-purple-100 text-purple-800
-                                    {% elif migration.status == 'completed' %}
+                                    {% if migration.status == 'completed' %}
                                         bg-green-100 text-green-800
-                                    {% elif migration.status == 'rollback' %}
+                                    {% else %}
                                         bg-red-100 text-red-800
                                     {% endif %}">
                                     {{ migration.status|title }}
                                 </span>
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap">{{ migration.creator.username }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {{ migration.completed_at.strftime('%Y-%m-%d %H:%M:%S') if migration.completed_at }}
+                            </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                {% if current_user.team.name == 'SA' and migration.status == 'waiting' %}
-                                    <form action="{{ url_for('acknowledge_migration', id=migration.id) }}" method="POST" class="inline">
-                                        <button type="submit" class="text-blue-600 hover:text-blue-900">Acknowledge</button>
-                                    </form>
-                                {% endif %}
-                                {% if current_user.team.name == 'SA' and migration.status == 'acknowledged' and not migration.assigned_to %}
-                                    <form action="{{ url_for('assign_migration', id=migration.id) }}" method="POST" class="inline ml-4">
-                                        <button type="submit" class="text-green-600 hover:text-green-900">Assign to Me</button>
-                                    </form>
-                                {% endif %}
-                                <a href="{{ url_for('view_migration', id=migration.id) }}" class="text-indigo-600 hover:text-indigo-900 ml-4">
-                                    View Details
-                                </a>
+                                <a href="{{ url_for('view_migration', id=migration.id) }}" 
+                                   class="text-blue-600 hover:text-blue-900 mr-4">View</a>
                             </td>
                         </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center text-gray-500 mt-8">
+                No results found for your search.
+            </div>
+        {% endif %}
+    {% else %}
+        <div class="text-center text-gray-500 mt-8">
+            Enter a search term or select a status to view results.
         </div>
-    </main>
-</body>
-</html>
+    {% endif %}
+</div>
 {% endblock %}

@@ -1,10 +1,11 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, send_file
+from flask import Flask, render_template, request, redirect, url_for, flash, send_file , jsonify
 from flask_login import LoginManager, login_required, current_user, login_user, logout_user
+from flask_socketio import SocketIO, emit
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import os
 from datetime import datetime
-from models import db, User, Team, Migration, MigrationFile, MigrationLog
+from models import db, User, Team, Migration, MigrationFile, MigrationLog, Notification
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key'  # Change this in production
@@ -16,6 +17,9 @@ db.init_app(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+
+# Initialize SocketIO
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -165,6 +169,26 @@ def create_migration():
         db.session.commit()
         log_action(migration.id, current_user.id, 'created')
         flash('Migration request created successfully.', 'success')
+
+        # Send notification to all SA team members
+        sa_team = Team.query.filter_by(name='SA').first()
+        if sa_team:
+            sa_users = User.query.filter_by(team_id=sa_team.id).all()
+            for user in sa_users:
+                notification = Notification(
+                    user_id=user.id,
+                    message=f'New migration request: {migration.title}',
+                    migration_id=migration.id
+                )
+                db.session.add(notification)
+            db.session.commit()
+            
+            # Emit socket event
+            socketio.emit('new_notification', {
+                'message': f'New migration request: {migration.title}',
+                'migration_id': migration.id
+            }, room='sa_team')
+
         return redirect(url_for('index'))
 
     return render_template('migration/create.html')
@@ -248,6 +272,47 @@ def update_migration_status(id):
     
     return redirect(url_for('view_migration', id=id))
 
+@app.route('/migration/<int:id>/edit', methods=['POST'])
+@login_required
+def edit_migration(id):
+    migration = Migration.query.get_or_404(id)
+    
+    # Update migration details
+    migration.title = request.form['title']
+    migration.description = request.form['description']
+    migration.customer_name = request.form['customer_name']
+    migration.customer_contact = request.form['customer_contact']
+    
+    # Handle new file uploads
+    files = request.files.getlist('files[]')
+    if files:
+        migration_folder = os.path.join(app.config['UPLOAD_FOLDER'], f'migration_{migration.id}')
+        os.makedirs(migration_folder, exist_ok=True)
+        
+        for file in files:
+            if file and file.filename:
+                filename = secure_filename(file.filename)
+                file_path = os.path.join(migration_folder, filename)
+                file.save(file_path)
+                
+                migration_file = MigrationFile(
+                    migration_id=migration.id,
+                    filename=filename,
+                    file_path=file_path,
+                    file_type='attachment'
+                )
+                db.session.add(migration_file)
+
+    try:
+        db.session.commit()
+        log_action(migration.id, current_user.id, 'edited', 'Migration details updated')
+        flash('Migration updated successfully.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash('Error updating migration.', 'error')
+    
+    return redirect(url_for('view_migration', id=id))
+
 @app.route('/file/<int:file_id>/view')
 @login_required
 def view_file(file_id):
@@ -259,6 +324,23 @@ def view_file(file_id):
 def download_file(file_id):
     file = MigrationFile.query.get_or_404(file_id)
     return send_file(file.file_path, as_attachment=True, download_name=file.filename)
+
+@app.route('/team')
+@login_required
+def team_page():
+    if current_user.team.name != 'SA':
+        flash('Access denied. This page is only for SA team members.', 'error')
+        return redirect(url_for('index'))
+    
+    # Get all migrations assigned to SA team
+    migrations = Migration.query.filter(
+        (Migration.status != 'completed') & 
+        ((Migration.assigned_to == current_user.id) | 
+         (Migration.assigned_to == None))
+    ).order_by(Migration.created_at.desc()).all()
+    
+    team_members = User.query.filter_by(team_id=current_user.team_id).all()
+    return render_template('task/team.html', migrations=migrations, team_members=team_members)
 
 # Initialize the database
 with app.app_context():
@@ -334,6 +416,82 @@ def create_user():
     # GET request - display form
     teams = Team.query.all()
     return render_template('admin/create.html', teams=teams)
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    # Get search parameters
+    search_query = request.args.get('search', '')
+    status_filter = request.args.get('status', '')
+    
+    # Base query
+    query = Migration.query
+
+    # Apply status filter if specified
+    if status_filter:
+        query = query.filter(Migration.status == status_filter)
+    else:
+        # Only show completed and rollback by default
+        query = query.filter(Migration.status.in_(['completed', 'rollback']))
+
+    # Apply search if specified
+    if search_query:
+        search = f"%{search_query}%"
+        query = query.filter(
+            db.or_(
+                Migration.title.ilike(search),
+                Migration.customer_name.ilike(search)
+            )
+        )
+
+    # Order by completion date
+    migrations = query.order_by(Migration.completed_at.desc()).all()
+    
+    return render_template('dashboard.html', migrations=migrations)
+
+@app.route('/notifications')
+@login_required
+def get_notifications():
+    notifications = Notification.query.filter_by(
+        user_id=current_user.id,
+        read=False
+    ).order_by(Notification.created_at.desc()).all()
+    
+    return jsonify([{
+        'id': n.id,
+        'message': n.message,
+        'migration_id': n.migration_id,
+        'created_at': n.created_at.strftime('%Y-%m-%d %H:%M:%S')
+    } for n in notifications])
+
+@app.route('/notifications/mark-read/<int:notification_id>', methods=['POST'])
+@login_required
+def mark_notification_read(notification_id):
+    notification = Notification.query.get_or_404(notification_id)
+    if notification.user_id == current_user.id:
+        notification.read = True
+        db.session.commit()
+    return jsonify({'success': True})
+
+@app.route('/notifications/mark-all-read', methods=['POST'])
+@login_required
+def mark_all_notifications_read():
+    notifications = Notification.query.filter_by(
+        user_id=current_user.id,
+        read=False
+    ).all()
+    
+    for notification in notifications:
+        notification.read = True
+    
+    db.session.commit()
+    return jsonify({'success': True})
+
+# Socket.IO event handlers
+@socketio.on('connect')
+def handle_connect():
+    if current_user.is_authenticated and current_user.team.name == 'SA':
+        socketio.emit('join', {'room': 'sa_team'})
 
 if __name__ == '__main__':
     app.run(debug=True)
