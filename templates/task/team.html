@@ -41,7 +41,15 @@
                         {% for migration in migrations %}
                         <div class="border rounded-lg p-4 hover:shadow-md transition-shadow">
                             <div class="flex justify-between items-start mb-2">
-                                <h3 class="text-lg font-medium text-gray-800">{{ migration.title }}</h3>
+                                <div class="flex items-center space-x-2">
+                                    <h3 class="text-lg font-medium text-gray-800">{{ migration.title }}</h3>
+                                    {% if migration.assigned_to %}
+                                        {% set assigned_user = User.query.get(migration.assigned_to) %}
+                                        <span class="text-sm text-gray-600">
+                                            ({{ assigned_user.username if assigned_user else 'Unknown User' }})
+                                        </span>
+                                    {% endif %}
+                                </div>
                                 <span class="px-3 py-1 rounded-full text-sm 
                                     {% if migration.status == 'waiting' %}
                                         bg-yellow-100 text-yellow-800

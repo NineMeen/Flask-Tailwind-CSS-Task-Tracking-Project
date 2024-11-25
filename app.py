@@ -328,19 +328,13 @@ def download_file(file_id):
 @app.route('/team')
 @login_required
 def team_page():
-    if current_user.team.name != 'SA':
-        flash('Access denied. This page is only for SA team members.', 'error')
+    if current_user.team.name == 'SA':
+        team_members = User.query.filter_by(team_id=current_user.team_id).all()
+        migrations = Migration.query.filter_by(status='in_progress').all()
+        return render_template('task/team.html', team_members=team_members, migrations=migrations,User=User)
+    else:
+        flash('Access denied. Only SA team members can view this page.', 'error')
         return redirect(url_for('index'))
-    
-    # Get all migrations assigned to SA team
-    migrations = Migration.query.filter(
-        (Migration.status != 'completed') & 
-        ((Migration.assigned_to == current_user.id) | 
-         (Migration.assigned_to == None))
-    ).order_by(Migration.created_at.desc()).all()
-    
-    team_members = User.query.filter_by(team_id=current_user.team_id).all()
-    return render_template('task/team.html', migrations=migrations, team_members=team_members)
 
 # Initialize the database
 with app.app_context():
@@ -431,8 +425,11 @@ def dashboard():
     if status_filter:
         query = query.filter(Migration.status == status_filter)
     else:
-        # Only show completed and rollback by default
-        query = query.filter(Migration.status.in_(['completed', 'rollback']))
+        # Show all tasks when searching, but only completed and rollback by default
+        if search_query:
+            query = query.filter(Migration.status.in_(['completed', 'rollback', 'in_progress', 'waiting']))
+        else:
+            query = query.filter(Migration.status.in_(['completed', 'rollback']))
 
     # Apply search if specified
     if search_query:

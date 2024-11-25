@@ -16,6 +16,8 @@
                 <select name="status" 
                         class="px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
                     <option value="">All Status</option>
+                    <option value="waiting" {% if request.args.get('status') == 'waiting' %}selected{% endif %}>Waiting</option>
+                    <option value="in_progress" {% if request.args.get('status') == 'in_progress' %}selected{% endif %}>In Progress</option>
                     <option value="completed" {% if request.args.get('status') == 'completed' %}selected{% endif %}>Completed</option>
                     <option value="rollback" {% if request.args.get('status') == 'rollback' %}selected{% endif %}>Rollback</option>
                 </select>
@@ -50,6 +52,14 @@
                                 <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
                                     {% if migration.status == 'completed' %}
                                         bg-green-100 text-green-800
+                                    {% elif migration.status == 'rollback' %}
+                                        bg-red-100 text-red-800
+                                    {% elif migration.status == 'in_progress' %}
+                                        bg-purple-100 text-purple-800
+                                    {% elif migration.status == 'waiting' %}
+                                        bg-yellow-100 text-yellow-800
+                                    {% elif migration.status == 'acknowledged' %}
+                                        bg-purple-100 text-purple-800
                                     {% else %}
                                         bg-red-100 text-red-800
                                     {% endif %}">
