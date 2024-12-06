@@ -58,8 +58,20 @@
                     {% for migration in migrations %}
                         {% if migration.status != 'completed' and migration.status != 'rollback' %}                    
                             <tr>
-                                <td class="px-6 py-4 whitespace-nowrap">{{ migration.title }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap">{{ migration.customer_name }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="w-24 overflow-hidden">
+                                        <p class="text-sm" title="{{ migration.title }}">
+                                            {{ migration.title[:10] }}{% if migration.title|length > 6 %}...{% endif %}
+                                        </p>
+                                    </div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="w-24 overflow-hidden">
+                                        <p class="text-sm" title="{{ migration.customer_name }}">
+                                            {{ migration.customer_name[:10] }}{% if migration.customer_name|length > 10 %}...{% endif %}
+                                        </p>
+                                    </div>
+                                </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
                                     {% if migration.status == 'waiting' %}

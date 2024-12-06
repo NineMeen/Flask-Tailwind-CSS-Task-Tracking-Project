@@ -411,9 +411,9 @@ def create_user():
     teams = Team.query.all()
     return render_template('admin/create.html', teams=teams)
 
-@app.route('/dashboard')
+@app.route('/search')
 @login_required
-def dashboard():
+def search():
     # Get search parameters
     search_query = request.args.get('search', '')
     status_filter = request.args.get('status', '')
@@ -444,7 +444,7 @@ def dashboard():
     # Order by completion date
     migrations = query.order_by(Migration.completed_at.desc()).all()
     
-    return render_template('dashboard.html', migrations=migrations)
+    return render_template('search.html', migrations=migrations)
 
 @app.route('/notifications')
 @login_required

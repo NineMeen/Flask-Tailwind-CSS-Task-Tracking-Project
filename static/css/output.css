@@ -8275,6 +8275,10 @@ html:has(.drawer-open.drawer-open) {
   height: 100%;
 }
 
+.h-2 {
+  height: 0.5rem;
+}
+
 .max-h-96 {
   max-height: 24rem;
 }
@@ -8331,6 +8335,18 @@ html:has(.drawer-open.drawer-open) {
   width: 100%;
 }
 
+.w-1\/4 {
+  width: 25%;
+}
+
+.w-24 {
+  width: 6rem;
+}
+
+.w-2 {
+  width: 0.5rem;
+}
+
 .min-w-full {
   min-width: 100%;
 }
@@ -8353,6 +8369,10 @@ html:has(.drawer-open.drawer-open) {
 
 .max-w-xl {
   max-width: 36rem;
+}
+
+.max-w-xs {
+  max-width: 20rem;
 }
 
 .flex-1 {
@@ -8960,6 +8980,8 @@ html:has(.drawer-open.drawer-open) {
 .ease-out {
   transition-timing-function: cubic-bezier(0, 0, 0.2, 1);
 }
+
+/* run this on command line: npx tailwindcss -i ./static/css/input.css -o ./static/css/output.css --watch */
 
 @media (hover:hover) {
   .table .\*\:hover > *tr:hover,
