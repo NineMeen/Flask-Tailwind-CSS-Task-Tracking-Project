@@ -272,46 +272,6 @@ def update_migration_status(id):
     
     return redirect(url_for('view_migration', id=id))
 
-@app.route('/migration/<int:id>/edit', methods=['POST'])
-@login_required
-def edit_migration(id):
-    migration = Migration.query.get_or_404(id)
-    
-    # Update migration details
-    migration.title = request.form['title']
-    migration.description = request.form['description']
-    migration.customer_name = request.form['customer_name']
-    migration.customer_contact = request.form['customer_contact']
-    
-    # Handle new file uploads
-    files = request.files.getlist('files[]')
-    if files:
-        migration_folder = os.path.join(app.config['UPLOAD_FOLDER'], f'migration_{migration.id}')
-        os.makedirs(migration_folder, exist_ok=True)
-        
-        for file in files:
-            if file and file.filename:
-                filename = secure_filename(file.filename)
-                file_path = os.path.join(migration_folder, filename)
-                file.save(file_path)
-                
-                migration_file = MigrationFile(
-                    migration_id=migration.id,
-                    filename=filename,
-                    file_path=file_path,
-                    file_type='attachment'
-                )
-                db.session.add(migration_file)
-
-    try:
-        db.session.commit()
-        log_action(migration.id, current_user.id, 'edited', 'Migration details updated')
-        flash('Migration updated successfully.', 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash('Error updating migration.', 'error')
-    
-    return redirect(url_for('view_migration', id=id))
 
 @app.route('/file/<int:file_id>/view')
 @login_required
@@ -328,7 +288,7 @@ def download_file(file_id):
 @app.route('/team')
 @login_required
 def team_page():
-    if current_user.team.name == 'SA':
+    if current_user.team.name == 'SA' or current_user.team.name == 'SD':
         team_members = User.query.filter_by(team_id=current_user.team_id).all()
         migrations = Migration.query.filter_by(status='in_progress').all()
         return render_template('task/team.html', team_members=team_members, migrations=migrations,User=User)
@@ -489,6 +449,116 @@ def mark_all_notifications_read():
 def handle_connect():
     if current_user.is_authenticated and current_user.team.name == 'SA':
         socketio.emit('join', {'room': 'sa_team'})
+
+
+@app.route('/migration/<int:id>/edit-page')
+@login_required
+def edit_migration_page(id):
+    if current_user.team.name != 'SD' and not current_user.is_admin:
+        flash('Only SD team members can edit migrations.', 'error')
+        return redirect(url_for('index'))
+    
+    migration = Migration.query.get_or_404(id)
+    if migration.created_by != current_user.id and not current_user.is_admin:
+        flash('You can only edit your own migrations.', 'error')
+        return redirect(url_for('index'))
+        
+    return render_template('migration/edit.html', migration=migration)
+
+@app.route('/migration/<int:id>/edit', methods=['POST'])
+@login_required
+def edit_migration(id):
+    if current_user.team.name != 'SD' and not current_user.is_admin:
+        flash('Only SD team members can edit migrations.', 'error')
+        return redirect(url_for('index'))
+
+    migration = Migration.query.get_or_404(id)
+    
+    # Check if the user is the creator or admin
+    if migration.created_by != current_user.id and not current_user.is_admin:
+        flash('You can only edit your own migrations.', 'error')
+        return redirect(url_for('index'))
+    
+    # Update migration details
+    migration.title = request.form['title']
+    migration.description = request.form['description']
+    migration.customer_name = request.form['customer_name']
+    migration.customer_contact = request.form['customer_contact']
+    
+    # Handle new file uploads
+    files = request.files.getlist('files[]')
+    if files:
+        migration_folder = os.path.join(app.config['UPLOAD_FOLDER'], f'migration_{migration.id}')
+        os.makedirs(migration_folder, exist_ok=True)
+        
+        for file in files:
+            if file and file.filename:
+                filename = secure_filename(file.filename)
+                file_path = os.path.join(migration_folder, filename)
+                file.save(file_path)
+                
+                migration_file = MigrationFile(
+                    migration_id=migration.id,
+                    filename=filename,
+                    file_path=file_path,
+                    file_type='attachment'
+                )
+                db.session.add(migration_file)
+
+    try:
+        db.session.commit()
+        log_action(migration.id, current_user.id, 'edited', 'Migration details updated')
+        flash('Migration updated successfully.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash('Error updating migration.', 'error')
+    
+    return redirect(url_for('view_migration', id=id))
+
+@app.route('/migration/<int:id>/delete', methods=['POST'])
+@login_required
+def delete_migration(id):
+    if current_user.team.name != 'SD' and not current_user.is_admin:
+        flash('Only SD team members can delete migrations.', 'error')
+        return redirect(url_for('index'))
+
+    migration = Migration.query.get_or_404(id)
+    
+    # Check if user is the creator or admin
+    if migration.created_by != current_user.id and not current_user.is_admin:
+        flash('You can only delete your own migrations.', 'error')
+        return redirect(url_for('index'))
+
+    try:
+        # Delete associated files from storage
+        migration_files = MigrationFile.query.filter_by(migration_id=id).all()
+        for file in migration_files:
+            if os.path.exists(file.file_path):
+                os.remove(file.file_path)
+            db.session.delete(file)
+
+        # Delete the migration folder if it exists
+        migration_folder = os.path.join(app.config['UPLOAD_FOLDER'], f'migration_{migration.id}')
+        if os.path.exists(migration_folder):
+            os.rmdir(migration_folder)
+
+        # Delete associated logs
+        MigrationLog.query.filter_by(migration_id=id).delete()
+        
+        # Delete associated notifications
+        Notification.query.filter_by(migration_id=id).delete()
+
+        # Delete the migration
+        db.session.delete(migration)
+        db.session.commit()
+
+        flash('Migration deleted successfully.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash('Error deleting migration.', 'error')
+        print(f"Error: {str(e)}")  # For debugging
+
+    return redirect(url_for('index'))
 
 if __name__ == '__main__':
     app.run(debug=True)
