@@ -67,6 +67,23 @@
                     placeholder="Any additional information..."></textarea>
             </div>
 
+            <!-- Add this after the customer information section -->
+            <div class="space-y-6">
+                <h3 class="text-lg font-medium text-gray-900">Schedule Information</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="scheduled_date" class="block text-sm font-medium text-gray-700">Migration Date</label>
+                        <input type="date" name="scheduled_date" id="scheduled_date"
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label for="scheduled_time" class="block text-sm font-medium text-gray-700">Migration Time</label>
+                        <input type="time" name="scheduled_time" id="scheduled_time"
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                </div>
+            </div>
+
             <!-- Submit Buttons -->
             <div class="flex justify-end space-x-3">
                 <a href="{{ url_for('index') }}"
@@ -106,4 +123,23 @@
         });
     });
     </script>
+
+<!-- Add this JavaScript to handle time format -->
+<script>
+document.getElementById('scheduled_time').addEventListener('change', function(e) {
+    const time = this.value;
+    if (time) {
+        const [hours] = time.split(':');
+        const hour = parseInt(hours);
+        const periodSelect = document.getElementById('time_period');
+        
+        // Automatically select AM/PM based on 24-hour input
+        if (hour >= 12) {
+            periodSelect.value = 'PM';
+        } else {
+            periodSelect.value = 'AM';
+        }
+    }
+});
+</script>
 {% endblock %}

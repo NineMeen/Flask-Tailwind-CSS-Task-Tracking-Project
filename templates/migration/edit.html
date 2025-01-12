@@ -81,6 +81,29 @@
                         </dd>
                     </div>
 
+                    <!-- Add this after the Customer Contact section and before Created By -->
+                    <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                        <dt class="text-sm font-medium text-gray-500">
+                            <label for="scheduled_date">Migration Date</label>
+                        </dt>
+                        <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                            <input type="date" name="scheduled_date" id="scheduled_date" 
+                                value="{{ migration.scheduled_date.strftime('%Y-%m-%d') if migration.scheduled_date else '' }}"
+                                class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md">
+                        </dd>
+                    </div>
+
+                    <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                        <dt class="text-sm font-medium text-gray-500">
+                            <label for="scheduled_time">Migration Time</label>
+                        </dt>
+                        <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                            <input type="time" name="scheduled_time" id="scheduled_time"
+                                value="{{ migration.scheduled_date.strftime('%H:%M') if migration.scheduled_date else '' }}"
+                                class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md">
+                        </dd>
+                    </div>
+
                     <!-- Created By (Read-only) -->
                     <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
                         <dt class="text-sm font-medium text-gray-500">Created By</dt>

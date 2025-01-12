@@ -4,9 +4,11 @@ from flask_socketio import SocketIO, emit
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from models import db, User, Team, Migration, MigrationFile, MigrationLog, Notification
 from ldap3 import Server, Connection, ALL, NTLM
+from flask_migrate import Migrate
+
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key'  # Change this in production
@@ -18,7 +20,7 @@ db.init_app(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
-
+migrate = Migrate(app, db)
 # LDAP Configuration
 LDAP_SERVER = '10.10.11.45'
 LDAP_PORT = 389
@@ -148,7 +150,15 @@ def login():
         username = request.form['username']
         password = request.form['password']
         
-        # Authenticate against LDAP
+        # First check local database
+        user = User.query.filter_by(username=username).first()
+        
+        if user and check_password_hash(user.password, password):
+            login_user(user)
+            next_page = request.args.get('next')
+            return redirect(next_page if next_page else url_for('index'))
+        
+        # If local auth fails, try LDAP
         ldap_result = authenticate_ldap(username, password)
         
         if ldap_result['status'] == 'success':
@@ -167,7 +177,7 @@ def login():
                 user = User(
                     username=username,
                     email=ldap_result['user']['email'] if ldap_result['user'].get('email') else f"{username}@symphony.net.th",
-                    password=generate_password_hash(password),  # Store hashed password
+                    password=generate_password_hash(password),
                     team_id=team.id,
                     is_admin=True if team_name == 'ADMIN' else False
                 )
@@ -182,13 +192,9 @@ def login():
             # Log the user in
             login_user(user)
             next_page = request.args.get('next')
-            
-            # Redirect based on user role
-            if user.is_admin:
-                return redirect(next_page if next_page else url_for('index'))
             return redirect(next_page if next_page else url_for('index'))
-        else:
-            flash('Invalid username or password', 'error')
+            
+        flash('Invalid username or password', 'error')
             
     return render_template('login.html')
 
@@ -203,51 +209,6 @@ def logout():
 def admin_dashboard():
     return render_template('admin/index.html')
 
-# @app.route('/migration/new', methods=['GET', 'POST'])
-# @login_required
-# def create_migration():
-#     if current_user.team.name != 'SD' and not current_user.is_admin:
-#         flash('Only SD team members can create migration requests.', 'error')
-#         return redirect(url_for('index'))
-
-#     if request.method == 'POST':
-#         migration = Migration(
-#             title=request.form['title'],
-#             description=request.form['description'],
-#             customer_name=request.form['customer_name'],
-#             customer_contact=request.form['customer_contact'],
-#             created_by=current_user.id,
-#             status='waiting'
-#         )
-#         db.session.add(migration)
-#         db.session.commit()
-
-#         # Create unique folder for this migration
-#         migration_folder = os.path.join(app.config['UPLOAD_FOLDER'], f'migration_{migration.id}')
-#         os.makedirs(migration_folder, exist_ok=True)
-
-#         # Handle file upload
-#         if 'file' in request.files:
-#             file = request.files['file']
-#             if file:
-#                 filename = secure_filename(file.filename)
-#                 file_path = os.path.join(migration_folder, filename)
-#                 file.save(file_path)
-                
-#                 migration_file = MigrationFile(
-#                     migration_id=migration.id,
-#                     filename=filename,
-#                     file_path=file_path,
-#                     file_type='attachment'
-#                 )
-#                 db.session.add(migration_file)
-#                 db.session.commit()
-
-#         log_action(migration.id, current_user.id, 'created')
-#         flash('Migration request created successfully.', 'success')
-#         return redirect(url_for('index'))
-
-#     return render_template('migration/create.html')
 
 @app.route('/migration/new', methods=['GET', 'POST'])
 @login_required
@@ -257,13 +218,29 @@ def create_migration():
         return redirect(url_for('index'))
 
     if request.method == 'POST':
+        scheduled_date_str = request.form.get('scheduled_date')
+        scheduled_time_str = request.form.get('scheduled_time')
+        
+        if scheduled_date_str and scheduled_time_str:
+            try:
+                scheduled_datetime = datetime.strptime(
+                    f"{scheduled_date_str} {scheduled_time_str}",
+                    "%Y-%m-%d %H:%M"
+                )
+            except ValueError:
+                flash('Invalid date or time format', 'error')
+                return redirect(url_for('create_migration'))
+        else:
+            scheduled_datetime = None
+
         migration = Migration(
             title=request.form['title'],
             description=request.form['description'],
             customer_name=request.form['customer_name'],
             customer_contact=request.form['customer_contact'],
             created_by=current_user.id,
-            status='waiting'
+            status='waiting',
+            scheduled_date=scheduled_datetime
         )
         db.session.add(migration)
         db.session.commit()
@@ -601,13 +578,30 @@ def edit_migration(id):
         flash('You can only edit your own migrations.', 'error')
         return redirect(url_for('index'))
     
-    # Update migration details
+    # Update scheduled date if provided
+    scheduled_date_str = request.form.get('scheduled_date')
+    scheduled_time_str = request.form.get('scheduled_time')
+    
+    if scheduled_date_str and scheduled_time_str:
+        try:
+            scheduled_datetime = datetime.strptime(
+                f"{scheduled_date_str} {scheduled_time_str}",
+                "%Y-%m-%d %H:%M"
+            )
+            migration.scheduled_date = scheduled_datetime
+        except ValueError:
+            flash('Invalid date or time format', 'error')
+            return redirect(url_for('edit_migration_page', id=id))
+    else:
+        migration.scheduled_date = None
+    
+    # Update other migration details
     migration.title = request.form['title']
     migration.description = request.form['description']
     migration.customer_name = request.form['customer_name']
     migration.customer_contact = request.form['customer_contact']
     
-    # Handle new file uploads
+    # Handle file uploads
     files = request.files.getlist('files[]')
     if files:
         migration_folder = os.path.join(app.config['UPLOAD_FOLDER'], f'migration_{migration.id}')
@@ -681,6 +675,47 @@ def delete_migration(id):
         print(f"Error: {str(e)}")  # For debugging
 
     return redirect(url_for('index'))
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    # Get date range from query parameters
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+
+    # Create base query
+    base_query = Migration.query
+
+    # Apply date filtering if dates are provided
+    if start_date and end_date:
+        try:
+            start = datetime.strptime(start_date, '%Y-%m-%d')
+            end = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)  # Include the end date
+            base_query = base_query.filter(Migration.created_at.between(start, end))
+        except ValueError:
+            flash('Invalid date format', 'error')
+
+    # Get migration statistics with date filter
+    total_migrations = base_query.count()
+    completed = base_query.filter_by(status='completed').count()
+    in_progress = base_query.filter_by(status='in_progress').count()
+    rollback = base_query.filter_by(status='rollback').count()
+    waiting = base_query.filter_by(status='waiting').count()
+    acknowledged = base_query.filter_by(status='acknowledged').count()
+
+    stats = {
+        'total': total_migrations,
+        'completed': completed,
+        'in_progress': in_progress,
+        'rollback': rollback,
+        'waiting': waiting,
+        'acknowledged': acknowledged
+    }
+
+    return render_template('dashboard.html', 
+                         stats=stats, 
+                         start_date=start_date, 
+                         end_date=end_date)
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=5000, debug=True)

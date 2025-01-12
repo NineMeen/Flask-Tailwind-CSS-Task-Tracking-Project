@@ -35,6 +35,7 @@ class Migration(db.Model):
     acknowledged_at = db.Column(db.DateTime)
     completed_at = db.Column(db.DateTime)
     files = db.relationship('MigrationFile', backref='migration', lazy=True)
+    scheduled_date = db.Column(db.DateTime, nullable=True)
 
 class MigrationFile(db.Model):
     id = db.Column(db.Integer, primary_key=True)
