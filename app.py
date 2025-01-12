@@ -6,6 +6,7 @@ from werkzeug.utils import secure_filename
 import os
 from datetime import datetime
 from models import db, User, Team, Migration, MigrationFile, MigrationLog, Notification
+from ldap3 import Server, Connection, ALL, NTLM
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key'  # Change this in production
@@ -18,8 +19,95 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
+# LDAP Configuration
+LDAP_SERVER = '10.10.11.45'
+LDAP_PORT = 389
+LDAP_BASE_DN = 'OU=WorkTracking,DC=test,DC=net,DC=th'
+
 # Initialize SocketIO
 socketio = SocketIO(app, cors_allowed_origins="*")
+
+def authenticate_ldap(username, password):
+    try:
+        # สร้าง Server object
+        server = Server(
+            LDAP_SERVER,
+            port=LDAP_PORT,
+            use_ssl=False,
+            get_info=ALL
+        )
+        
+        # สร้าง Connection object
+        user_dn = username
+        conn = Connection(
+            server,
+            user=user_dn,
+            password=password,
+            authentication='SIMPLE'  # ใช้ NTLM authentication สำหรับ Windows LDAP
+        )
+        
+        # ทำการ bind เพื่อตรวจสอบการ authenticate
+        if conn.bind():
+            # ค้นหาข้อมูล user
+            conn.search(
+                LDAP_BASE_DN,
+                f'(&(objectClass=person)(sAMAccountName={username}))',
+                attributes=['displayName', 'mail', 'memberOf']
+            )
+            
+            if len(conn.entries) > 0:
+                user_data = conn.entries[0]
+                # Extract group names from memberOf DNs
+                groups = []
+                if hasattr(user_data, 'memberOf'):
+                    for group_dn in user_data.memberOf:
+                        try:
+                            cn_parts = [part for part in group_dn.split(',') if part.startswith('CN=')]
+                            if cn_parts:
+                                group_name = cn_parts[0].replace('CN=', '').strip()
+                                if group_name == 'GWTK01':
+                                    group_name = 'SA'
+                                    groups.append(group_name)
+                                elif group_name == 'GWTK02':
+                                    group_name = 'SD'
+                                    groups.append(group_name)
+                                elif group_name == 'GWTK03':
+                                    group_name = 'NS'
+                                    groups.append(group_name)
+                                elif group_name == 'GWTKADMIN':
+                                    group_name = 'SA'
+                                    team_name = 'ADMIN'
+                                    groups.append(group_name)
+                        except Exception as e:
+                            continue
+                
+                # Convert groups list to single string if only one group
+                final_groups = groups[0] if len(groups) == 1 else groups
+                
+                return {
+                    'status': 'success',
+                    'message': 'Authentication successful',
+                    'user': {
+                        'displayName': user_data.displayName.value if hasattr(user_data, 'displayName') else None,
+                        'email': user_data.mail.value if hasattr(user_data, 'mail') else None,
+                        'memberOf': final_groups  # Will be string if single group, list if multiple groups
+                    }
+                }
+            return {
+                'status': 'success',
+                'message': 'Authentication successful but no user data found'
+            }
+        else:
+            return {
+                'status': 'error',
+                'message': 'Invalid credentials'
+            }
+            
+    except Exception as e:
+        return {
+            'status': 'error',
+            'message': str(e)
+        }
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -54,20 +142,54 @@ def index():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
-        if current_user.is_admin:
-            return redirect(url_for('index'))  # Create this route
         return redirect(url_for('index'))
         
     if request.method == 'POST':
-        user = User.query.filter_by(username=request.form['username']).first()
-        if user and check_password_hash(user.password, request.form['password']):
+        username = request.form['username']
+        password = request.form['password']
+        
+        # Authenticate against LDAP
+        ldap_result = authenticate_ldap(username, password)
+        
+        if ldap_result['status'] == 'success':
+            # Check if user exists in local database
+            user = User.query.filter_by(username=username).first()
+            
+            if user is None:
+                # Create new user if they don't exist
+                team_name = ldap_result['user']['memberOf']
+                team = Team.query.filter_by(name=team_name).first()
+                
+                if team is None:
+                    flash('Invalid team assignment from LDAP', 'error')
+                    return redirect(url_for('login'))
+                
+                user = User(
+                    username=username,
+                    email=ldap_result['user']['email'] if ldap_result['user'].get('email') else f"{username}@symphony.net.th",
+                    password=generate_password_hash(password),  # Store hashed password
+                    team_id=team.id,
+                    is_admin=True if team_name == 'ADMIN' else False
+                )
+                try:
+                    db.session.add(user)
+                    db.session.commit()
+                except Exception as e:
+                    db.session.rollback()
+                    flash('Error creating user account', 'error')
+                    return redirect(url_for('login'))
+            
+            # Log the user in
             login_user(user)
             next_page = request.args.get('next')
+            
+            # Redirect based on user role
             if user.is_admin:
-                return redirect(next_page if next_page else url_for('index'))  # Admin route
-            return redirect(next_page if next_page else url_for('index'))  # Regular user route
+                return redirect(next_page if next_page else url_for('index'))
+            return redirect(next_page if next_page else url_for('index'))
         else:
             flash('Invalid username or password', 'error')
+            
     return render_template('login.html')
 
 @app.route('/logout')
@@ -561,4 +683,4 @@ def delete_migration(id):
     return redirect(url_for('index'))
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
