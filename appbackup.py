@@ -13,7 +13,6 @@ from models import db, User, Team, Migration, MigrationFile, MigrationLog, Notif
 from ldap3 import Server, Connection, ALL, NTLM
 from flask_migrate import Migrate
 from sqlalchemy.pool import NullPool
-from flask_wtf import FlaskForm
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key'  # Change this in production
@@ -27,8 +26,8 @@ app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
 # Initialize extensions
-db.init_app(app)
-migrate = Migrate(app, db)
+# db.init_app(app)
+# migrate = Migrate(app, db)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -72,23 +71,31 @@ def authenticate_ldap(username, password):
             
             if len(conn.entries) > 0:
                 user_data = conn.entries[0]
-                print(f"LDAP User Data: {user_data}")  # Debug print
-                
                 # Extract group names from memberOf DNs
                 groups = []
                 if hasattr(user_data, 'memberOf'):
                     for group_dn in user_data.memberOf:
                         try:
-                            print(f"Processing group DN: {group_dn}")  # Debug print
                             cn_parts = [part for part in group_dn.split(',') if part.startswith('CN=')]
                             if cn_parts:
                                 group_name = cn_parts[0].replace('CN=', '').strip()
-                                groups.append(group_name)
+                                if group_name == 'GWTK01':
+                                    group_name = 'SA'
+                                    groups.append(group_name)
+                                elif group_name == 'GWTK02':
+                                    group_name = 'SD'
+                                    groups.append(group_name)
+                                elif group_name == 'GWTK03':
+                                    group_name = 'NS'
+                                    groups.append(group_name)
+                                elif group_name == 'GWTKADMIN':
+                                    group_name = 'ADMIN'
+                                    groups.append(group_name)
                         except Exception as e:
-                            print(f"Error processing group: {e}")  # Debug print
                             continue
                 
-                print(f"Extracted groups: {groups}")  # Debug print
+                # Convert groups list to single string if only one group
+                final_groups = groups[0] if len(groups) == 1 else groups
                 
                 return {
                     'status': 'success',
@@ -96,7 +103,7 @@ def authenticate_ldap(username, password):
                     'user': {
                         'displayName': user_data.displayName.value if hasattr(user_data, 'displayName') else None,
                         'email': user_data.mail.value if hasattr(user_data, 'mail') else None,
-                        'memberOf': groups
+                        'memberOf': final_groups
                     }
                 }
             return {
@@ -110,7 +117,6 @@ def authenticate_ldap(username, password):
             }
             
     except Exception as e:
-        print(f"LDAP Authentication Error: {e}")  # Debug print
         return {
             'status': 'error',
             'message': str(e)
@@ -169,46 +175,27 @@ def login():
             # Check if user exists in local database
             user = User.query.filter_by(username=username).first()
             
-            if user is not None and not user.is_active:
-                flash('Your account is disabled. Please contact an administrator.', 'error')
-                return redirect(url_for('login'))
-                
             if user is None:
                 # Get team from LDAP memberOf attribute
                 ldap_groups = ldap_result['user']['memberOf']
-                team_name = None
                 
-                # Debug print
-                print(f"LDAP Groups: {ldap_groups}")
-                
-                # Handle if memberOf is a list or string
-                if isinstance(ldap_groups, list) and ldap_groups:
-                    # Try to find the first valid team
+                # Handle if memberOf is a list, string, or None
+                if isinstance(ldap_groups, list) and ldap_groups:  # Check if list is not empty
+                    # If multiple groups, try to find the first valid team
+                    team_name = None
                     for group in ldap_groups:
-                        if 'GWTK01' in group:
-                            team_name = 'SA'
+                        mapped_team = map_ldap_group_to_team(group)
+                        if mapped_team:
+                            team_name = mapped_team
                             break
-                        elif 'GWTK02' in group:
-                            team_name = 'SD'
-                            break
-                        elif 'GWTK03' in group:
-                            team_name = 'NS'
-                            break
-                elif isinstance(ldap_groups, str):
-                    # Single group
-                    if 'GWTK01' in ldap_groups:
-                        team_name = 'SA'
-                    elif 'GWTK02' in ldap_groups:
-                        team_name = 'SD'
-                    elif 'GWTK03' in ldap_groups:
-                        team_name = 'NS'
-                
-                # If no valid team found, set default
-                if not team_name:
-                    print(f"No valid team found in groups: {ldap_groups}")
+                    if team_name is None:
+                        team_name = 'NS'  # Default if no valid team found
+                elif isinstance(ldap_groups, str) and ldap_groups:  # Check if string is not empty
+                    # If single group
+                    team_name = map_ldap_group_to_team(ldap_groups)
+                else:
+                    # If no groups, None, empty list, or empty string
                     team_name = 'NS'  # Default team
-                
-                print(f"Assigned team: {team_name}")  # Debug print
                 
                 # Create new user with team from LDAP
                 user = User(
@@ -216,15 +203,13 @@ def login():
                     email=ldap_result['user']['email'] if ldap_result['user'].get('email') else f"{username}@symphony.net.th",
                     password=generate_password_hash(password),
                     team_id=get_team_id(team_name),
-                    is_admin='GWTKADMIN' in str(ldap_groups),
-                    is_active=True
+                    is_admin=True if 'GWTKADMIN' in (ldap_groups if isinstance(ldap_groups, list) else [ldap_groups]) else False
                 )
                 try:
                     db.session.add(user)
                     db.session.commit()
                 except Exception as e:
                     db.session.rollback()
-                    print(f"Error creating user: {e}")  # Debug print
                     flash('Error creating user account', 'error')
                     return redirect(url_for('login'))
             
@@ -237,13 +222,26 @@ def login():
             
     return render_template('login.html')
 
+def map_ldap_group_to_team(ldap_group):
+    """Helper function to map LDAP GWTK groups to team names"""
+    if not ldap_group:
+        return 'SA'  # Default team if no group
+        
+    group_mapping = {
+        'GWTK01': 'SA',
+        'GWTK02': 'SD',
+        'GWTK03': 'NS',
+        'GWTKADMIN': 'ADMIN'
+    }
+    return group_mapping.get(str(ldap_group), 'NS')  # Default to NS if unknown
+
 def get_team_id(team_name):
     """Helper function to map team names to local team IDs"""
     team_mapping = {
         'SA': 1,
         'SD': 2,
         'NS': 3,
-        'ADMIN': 1  # ADMIN users are part of SA team
+        'ADMIN': 1  # Assuming ADMIN users are part of SA team
     }
     return team_mapping.get(team_name, 3)  # Default to NS team if unknown
 
@@ -253,10 +251,10 @@ def logout():
     logout_user()
     return redirect(url_for('login'))
 
-# @app.route('/admin')
-# @login_required
-# def admin_dashboard():
-#     return render_template('admin/index.html')
+@app.route('/admin')
+@login_required
+def admin_dashboard():
+    return render_template('admin/index.html')
 
 
 @app.route('/migration/new', methods=['GET', 'POST'])
@@ -610,14 +608,8 @@ def edit_migration_page(id):
     if migration.created_by != current_user.id and not current_user.is_admin:
         flash('You can only edit your own migrations.', 'error')
         return redirect(url_for('index'))
-    
-    # Get the migration files
-    migration_files = MigrationFile.query.filter_by(migration_id=id).all()
-    form = FlaskForm()
-    return render_template('migration/edit.html', 
-                         migration=migration,
-                         migration_files=migration_files,
-                         form=form)  # Pass files and form to template
+        
+    return render_template('migration/edit.html', migration=migration)
 
 @app.route('/migration/<int:id>/edit', methods=['POST'])
 @login_required
@@ -771,168 +763,6 @@ def dashboard():
                          stats=stats, 
                          start_date=start_date, 
                          end_date=end_date)
-
-@app.route('/admin/user-management')
-@login_required
-def user_manage():
-    if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.', 'error')
-        return redirect(url_for('index'))
-    
-    users = User.query.all()
-    teams = Team.query.all()
-    return render_template('admin/user_manage.html', users=users, teams=teams)
-
-@app.route('/admin/user/<int:user_id>/update', methods=['POST'])
-@login_required
-def update_user(user_id):
-    if not current_user.is_admin:
-        return jsonify({'status': 'error', 'message': 'Admin privileges required'})
-
-    user = User.query.get_or_404(user_id)
-    action = request.form.get('action')
-
-    if action == 'toggle_active':
-        user.is_active = not user.is_active
-    elif action == 'toggle_admin':
-        user.is_admin = not user.is_admin
-    elif action == 'update_team':
-        new_team_id = request.form.get('team_id')
-        if new_team_id:
-            user.team_id = new_team_id
-
-    try:
-        db.session.commit()
-        return jsonify({'status': 'success'})
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'status': 'error', 'message': str(e)})
-
-@app.errorhandler(404)
-def page_not_found(e):
-    return render_template('admin/404.html'), 404
-
-@app.route('/migration/file/<int:file_id>/delete', methods=['POST'])
-@login_required
-def delete_migration_file(file_id):
-    file = MigrationFile.query.get_or_404(file_id)
-    migration = Migration.query.get(file.migration_id)
-    
-    # Check permissions
-    if current_user.team.name != 'SD' and not current_user.is_admin:
-        flash('Only SD team members can delete files.', 'error')
-        return redirect(url_for('edit_migration_page', id=migration.id))
-    
-    if migration.created_by != current_user.id and not current_user.is_admin:
-        flash('You can only delete files from your own migrations.', 'error')
-        return redirect(url_for('edit_migration_page', id=migration.id))
-
-    try:
-        # Delete file from storage
-        if os.path.exists(file.file_path):
-            os.remove(file.file_path)
-        
-        # Delete from database
-        db.session.delete(file)
-        db.session.commit()
-        
-        flash('File deleted successfully.', 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash('Error deleting file.', 'error')
-        print(f"Error: {str(e)}")  # For debugging
-    
-    return redirect(url_for('edit_migration_page', id=migration.id))
-
-@app.route('/migration/file/<int:file_id>/replace', methods=['POST'])
-@login_required
-def replace_migration_file(file_id):
-    file = MigrationFile.query.get_or_404(file_id)
-    migration = Migration.query.get(file.migration_id)
-    
-    # Check permissions
-    if current_user.team.name != 'SD' and not current_user.is_admin:
-        flash('Only SD team members can replace files.', 'error')
-        return redirect(url_for('edit_migration_page', id=migration.id))
-    
-    if migration.created_by != current_user.id and not current_user.is_admin:
-        flash('You can only replace files from your own migrations.', 'error')
-        return redirect(url_for('edit_migration_page', id=migration.id))
-
-    if 'new_file' not in request.files:
-        flash('No file uploaded.', 'error')
-        return redirect(url_for('edit_migration_page', id=migration.id))
-    
-    new_file = request.files['new_file']
-    if new_file.filename == '':
-        flash('No file selected.', 'error')
-        return redirect(url_for('edit_migration_page', id=migration.id))
-
-    try:
-        # Delete old file
-        if os.path.exists(file.file_path):
-            os.remove(file.file_path)
-        
-        # Save new file
-        filename = secure_filename(new_file.filename)
-        migration_folder = os.path.join(app.config['UPLOAD_FOLDER'], f'migration_{migration.id}')
-        file_path = os.path.join(migration_folder, filename)
-        new_file.save(file_path)
-        
-        # Update database record
-        file.filename = filename
-        file.file_path = file_path
-        file.uploaded_at = datetime.utcnow()
-        db.session.commit()
-        
-        flash('File replaced successfully.', 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash('Error replacing file.', 'error')
-        print(f"Error: {str(e)}")  # For debugging
-    
-    return redirect(url_for('edit_migration_page', id=migration.id))
-
-@app.route('/migration/<int:id>/files/delete', methods=['POST'])
-@login_required
-def delete_migration_files(id):
-    migration = Migration.query.get_or_404(id)
-    
-    # Check permissions
-    if current_user.team.name != 'SD' and not current_user.is_admin:
-        flash('Only SD team members can delete files.', 'error')
-        return redirect(url_for('edit_migration_page', id=id))
-    
-    if migration.created_by != current_user.id and not current_user.is_admin:
-        flash('You can only delete files from your own migrations.', 'error')
-        return redirect(url_for('edit_migration_page', id=id))
-
-    file_ids = request.form.getlist('file_ids[]')
-    
-    if not file_ids:
-        flash('No files selected for deletion.', 'error')
-        return redirect(url_for('edit_migration_page', id=id))
-
-    try:
-        for file_id in file_ids:
-            file = MigrationFile.query.get(file_id)
-            if file and file.migration_id == id:  # Ensure file belongs to this migration
-                # Delete file from storage
-                if os.path.exists(file.file_path):
-                    os.remove(file.file_path)
-                
-                # Delete from database
-                db.session.delete(file)
-        
-        db.session.commit()
-        flash('Selected files deleted successfully.', 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash('Error deleting files.', 'error')
-        print(f"Error: {str(e)}")  # For debugging
-    
-    return redirect(url_for('edit_migration_page', id=id))
-
 if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0', port=5000)
     #socketio.run(app, host='0.0.0.0', port=5000)

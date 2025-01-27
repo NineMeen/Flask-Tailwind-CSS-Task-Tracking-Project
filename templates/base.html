@@ -16,7 +16,7 @@
     <!-- Page content -->
     <div class="drawer-content flex flex-col">
       <!-- Navbar -->
-      <div class="w-full navbar bg-base-300">
+      <div class="w-full navbar bg-[#2e2b2e]">
         <div class="flex-none lg:hidden">
           <label for="my-drawer" class="btn btn-square btn-ghost">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-6 h-6 stroke-current">
@@ -24,14 +24,14 @@
             </svg>
           </label>
         </div>
-        <div class="flex-1 px-2 mx-2">Task Tracker</div>
+        <div class="flex-1 px-2 mx-2 text-white">Task Tracker</div>
         <div class="flex-none">
 <!-- Update the notification bell section -->
 <div class="flex-none">
   <div class="dropdown dropdown-end">
       <button class="btn btn-ghost btn-circle" onclick="toggleNotifications()">
           <div class="indicator">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="white">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
               </svg>
               <span id="notification-badge" class="badge badge-xs badge-primary indicator-item hidden">0</span>
@@ -51,7 +51,7 @@
   </div>
 </div>
           <div class="flex items-center">
-            <span class="text-gray-700 mr-4">{{ current_user.username }} ({{ current_user.team.name }})</span>
+            <span class="text-white mr-4">{{ current_user.username }} ({{ current_user.team.name }})</span>
           </div>
           <div class="dropdown dropdown-end">
             <label tabindex="0" class="btn btn-ghost btn-circle avatar">
@@ -76,10 +76,10 @@
     <!-- Sidebar -->
     <div class="drawer-side">
       <label for="my-drawer" class="drawer-overlay"></label>
-      <ul class="menu p-4 w-80 h-full bg-base-200 text-base-content">
-        <li class="mb-2 font-semibold text-xl">Task Tracker</li>
+      <ul class="menu p-4 w-80 h-full  bg-[#282528] text-base-content">
+        <li class="mb-2 font-semibold text-xl text-white">Task Tracker</li>
         <li class="mb-[20px]">
-          <a href="{{ url_for('index') }}" class="{% if request.endpoint == 'index' %}active{% endif %}">
+          <a href="{{ url_for('index') }}" class="{% if request.endpoint == 'index' %}active{% endif %} text-white">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
             </svg>
@@ -87,7 +87,7 @@
           </a>
         </li>
         <li class="mb-[20px]">
-          <a href="{{ url_for('search') }}" class="{% if request.endpoint == 'search' %}active{% endif %}">
+          <a href="{{ url_for('search') }}" class="{% if request.endpoint == 'search' %}active{% endif %} text-white">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 30 30" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M 13 3 C 7.4889971 3 3 7.4889971 3 13 C 3 18.511003 7.4889971 23 13 23 C 15.396508 23 17.597385 22.148986 19.322266 20.736328 L 25.292969 26.707031 A 1.0001 1.0001 0 1 0 26.707031 25.292969 L 20.736328 19.322266 C 22.148986 17.597385 23 15.396508 23 13 C 23 7.4889971 18.511003 3 13 3 z M 13 5 C 17.430123 5 21 8.5698774 21 13 C 21 17.430123 17.430123 21 13 21 C 8.5698774 21 5 17.430123 5 13 C 5 8.5698774 8.5698774 5 13 5 z" />
             </svg>
@@ -95,7 +95,7 @@
           </a>
         </li>
         <li class="mb-[20px]">
-          <a href="{{ url_for('team_page') }}" class="{% if request.endpoint == 'teams' %}active{% endif %}">
+          <a href="{{ url_for('team_page') }}" class="{% if request.endpoint == 'teams' %}active{% endif %} text-white">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
             </svg>
@@ -103,7 +103,7 @@
           </a>
         </li>
         <li class="mb-[20px]">
-            <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint == 'dashboard' %}active{% endif %}">
+            <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint == 'dashboard' %}active{% endif %} text-white">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
@@ -114,7 +114,7 @@
         {% if current_user.is_admin %}
         <li class="mb-[20px]">
             <details>
-              <summary class="{% if request.endpoint == 'create_user' %}active{% endif %}">
+              <summary class="text-white">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -123,8 +123,8 @@
               </summary>
               <ul>
                 <li>
-                    <a href="{{ url_for('create_user') }}" class="{% if request.endpoint == 'create_user' %}active{% endif %}">
-                        Add User
+                    <a href="{{ url_for('user_manage') }}" class="text-white {% if request.endpoint == 'user_manage' %}active{% endif %}">
+                        User Management
                     </a>
                 </li>
               </ul>

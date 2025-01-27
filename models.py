@@ -16,10 +16,33 @@ class User(db.Model, UserMixin):
     email = db.Column(db.String(120), unique=True, nullable=False)
     team_id = db.Column(db.Integer, db.ForeignKey('team.id'), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    
     created_migrations = db.relationship('Migration', backref='creator', lazy=True, 
                                       foreign_keys='Migration.created_by')
     assigned_migrations = db.relationship('Migration', backref='assignee', lazy=True,
                                        foreign_keys='Migration.assigned_to')
+
+    # # Add these UserMixin required properties
+    # @property
+    # def is_authenticated(self):
+    #     return True
+
+    # @property
+    # def is_active(self):
+    #     return self.is_active
+
+    # @property
+    # def is_anonymous(self):
+    #     return False
+
+    # def get_id(self):
+    #     return str(self.id)
+
+    # # Add property to check if user can login
+    # @property
+    # def can_login(self):
+    #     return self.is_active
 
 class Migration(db.Model):
     id = db.Column(db.Integer, primary_key=True)

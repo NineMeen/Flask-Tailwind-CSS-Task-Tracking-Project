@@ -149,6 +149,34 @@
                                     <div class="ml-4 flex-shrink-0 space-x-2">
                                         <a href="{{ url_for('view_file', file_id=file.id) }}" target="_blank" 
                                            class="font-medium text-blue-600 hover:text-blue-500">View</a>
+                                        
+                                        <!-- Replace File Button -->
+                                        <button type="button" onclick="document.getElementById('replace-file-input-{{ file.id }}').click()"
+                                                class="font-medium text-indigo-600 hover:text-indigo-500">
+                                            Replace
+                                        </button>
+                                        <form id="replace-form-{{ file.id }}" 
+                                              action="{{ url_for('replace_migration_file', file_id=file.id) }}" 
+                                              method="POST" 
+                                              enctype="multipart/form-data" 
+                                              class="hidden">
+                                            <input type="file" 
+                                                   id="replace-file-input-{{ file.id }}" 
+                                                   name="new_file" 
+                                                   onchange="document.getElementById('replace-form-{{ file.id }}').submit()"
+                                                   class="hidden">
+                                        </form>
+                                        
+                                        <!-- Delete File Button -->
+                                        <form action="{{ url_for('delete_migration_file', file_id=file.id) }}" 
+                                              method="POST" 
+                                              class="inline">
+                                            <button type="submit" 
+                                                    onclick="return confirm('Are you sure you want to delete this file?')"
+                                                    class="font-medium text-red-600 hover:text-red-500">
+                                                Delete
+                                            </button>
+                                        </form>
                                     </div>
                                 </li>
                                 {% endif %}

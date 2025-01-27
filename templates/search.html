@@ -144,6 +144,50 @@
                     </tbody>
                 </table>
             </div>
+
+            <!-- Pagination -->
+            {% if pagination.pages > 1 %}
+            <div class="flex justify-center mt-4">
+                <div class="join">
+                    <!-- First page -->
+                    <a href="{{ url_for('search', page=1, search=search_query, status=status_filter) }}" 
+                       class="join-item btn {% if pagination.page == 1 %}btn-disabled{% endif %}">
+                        «
+                    </a>
+
+                    <!-- Previous page -->
+                    <a href="{{ url_for('search', page=pagination.prev_num, search=search_query, status=status_filter) }}" 
+                       class="join-item btn {% if not pagination.has_prev %}btn-disabled{% endif %}">
+                        ‹
+                    </a>
+
+                    <!-- Page numbers -->
+                    {% set start_page = pagination.page - 2 if pagination.page - 2 > 0 else 1 %}
+                    {% set end_page = start_page + 4 if start_page + 4 <= pagination.pages else pagination.pages %}
+                    {% set start_page = end_page - 4 if end_page - 4 > 0 else 1 %}
+                    
+                    {% for page_num in range(start_page, end_page + 1) %}
+                        <a href="{{ url_for('search', page=page_num, search=search_query, status=status_filter) }}" 
+                           class="join-item btn {% if page_num == pagination.page %}btn-active{% endif %}">
+                            {{ page_num }}
+                        </a>
+                    {% endfor %}
+
+                    <!-- Next page -->
+                    <a href="{{ url_for('search', page=pagination.next_num, search=search_query, status=status_filter) }}" 
+                       class="join-item btn {% if not pagination.has_next %}btn-disabled{% endif %}">
+                        ›
+                    </a>
+
+                    <!-- Last page -->
+                    <a href="{{ url_for('search', page=pagination.pages, search=search_query, status=status_filter) }}" 
+                       class="join-item btn {% if pagination.page == pagination.pages %}btn-disabled{% endif %}">
+                        »
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+
         {% else %}
             <div class="text-center text-gray-500 mt-8">
                 No results found for your search.

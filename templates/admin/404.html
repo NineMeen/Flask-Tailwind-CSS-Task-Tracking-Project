@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>404 - Page Not Found</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.js"></script>
+    <!-- <link href="https://cdnjs.cloudflare.com/ajax/libs/daisyui/2.51.5/full.css" rel="stylesheet" type="text/css" /> -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/output.css') }}">
+</head>
+<body class="min-h-screen bg-base-200 flex items-center justify-center p-4">
+    <div class="max-w-md w-full">
+        <!-- Card container -->
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body items-center text-center">
+                <!-- Error code with gradient -->
+                <h1 class="font-bold text-8xl bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary animate-pulse">
+                    404
+                </h1>
+
+                <!-- Error icon using DaisyUI's mock error icon -->
+                <div class="my-4">
+                    <div class="alert alert-error shadow-lg w-16 h-16 rounded-full flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- Error message -->
+                <h2 class="card-title text-2xl font-bold mb-2">Page Not Found</h2>
+                <p class="text-base-content/70 mb-6">
+                    Oops! The page you're looking for seems to have gone on vacation.
+                </p>
+
+                <!-- Action buttons -->
+                <div class="card-actions justify-center gap-2">
+                    <button class="btn btn-primary" onclick="window.history.back()">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                        </svg>
+                        Go Back
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
