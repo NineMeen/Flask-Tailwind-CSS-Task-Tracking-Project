@@ -60,6 +60,14 @@
                     <div class="text-red-600 text-2xl font-bold">{{ stats.rollback }}</div>
                     <div class="text-red-600">Rollback</div>
                 </div>
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="text-gray-600 text-2xl font-bold">{{ stats.waiting }}</div>
+                    <div class="text-gray-600">Waiting</div>
+                </div>
+                <div class="bg-indigo-50 rounded-lg p-4">
+                    <div class="text-indigo-600 text-2xl font-bold">{{ stats.acknowledged }}</div>
+                    <div class="text-indigo-600">Acknowledged</div>
+                </div>
             </div>
         </div>
 
@@ -93,7 +101,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     '#FBBF24', // yellow
                     '#EF4444', // red
                     '#9CA3AF', // gray
-                    '#3B82F6'  // blue
+                    '#6366F1'  // indigo
                 ],
                 borderWidth: 0
             }]

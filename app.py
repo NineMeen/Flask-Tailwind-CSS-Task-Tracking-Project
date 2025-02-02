@@ -2,7 +2,7 @@ from gevent import monkey
 monkey.patch_all()
 
 # Now import other modules
-from flask import Flask, render_template, request, redirect, url_for, flash, send_file, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, send_file, jsonify, render_template_string
 from flask_login import LoginManager, login_required, current_user, login_user, logout_user
 from flask_socketio import SocketIO, emit
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -14,6 +14,8 @@ from ldap3 import Server, Connection, ALL, NTLM
 from flask_migrate import Migrate
 from sqlalchemy.pool import NullPool
 from flask_wtf import FlaskForm
+from flask_mail import Mail, Message
+from jinja2 import Template
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key'  # Change this in production
@@ -25,6 +27,16 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
 }
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+
+# Mail configuration
+app.config['MAIL_SERVER'] = '10.10.10.160'  # Change according to your email provider
+app.config['MAIL_PORT'] = 25
+app.config['MAIL_USE_TLS'] = True
+# app.config['MAIL_USERNAME'] = 'your-email@gmail.com'  # Change this
+# app.config['MAIL_PASSWORD'] = 'your-app-password'  # Change this
+app.config['MAIL_DEFAULT_SENDER'] = 'no-reply-worktracking@symphony.net.th'  # Change this
+
+mail = Mail(app)
 
 # Initialize extensions
 db.init_app(app)
@@ -137,6 +149,28 @@ def log_action(migration_id, user_id, action, details=None):
     db.session.add(log)
     db.session.commit()
 
+def send_notification_email(recipients, subject, template_name, **kwargs):
+    """
+    Generic function to send HTML emails using Flask's template rendering
+    """
+    try:
+        # Load template using Flask's render_template
+        template_path = f'email/{template_name}.html'
+        html_content = render_template(template_path, **kwargs)
+        
+        msg = Message(
+            subject=subject,
+            recipients=recipients,
+            html=html_content
+        )
+        mail.send(msg)
+        print(f"Email sent successfully with template: {template_path}")  # Debug print
+        return True
+    except Exception as e:
+        print(f"Error sending email: {str(e)}")  # Debug print
+        print(f"Template kwargs: {kwargs}")  # Debug print
+        return False
+
 @app.route('/')
 @login_required
 def index():
@@ -233,9 +267,16 @@ def login():
             next_page = request.args.get('next')
             return redirect(next_page if next_page else url_for('index'))
             
-        flash('Invalid username or password', 'error')
+        # Handle LDAP connection errors specifically
+        elif 'socket connection error' in ldap_result['message'].lower():
+            flash('Unable to connect to authentication server. Please try again later or contact your administrator.', 'warning')
+            # Log the error for administrators
+            print(f"LDAP Connection Error: {ldap_result['message']}")
+            return render_template('login.html', offline_mode=True)
+        else:
+            flash('Invalid username or password', 'error')
             
-    return render_template('login.html')
+    return render_template('login.html', offline_mode=False)
 
 def get_team_id(team_name):
     """Helper function to map team names to local team IDs"""
@@ -318,24 +359,29 @@ def create_migration():
         log_action(migration.id, current_user.id, 'created')
         flash('Migration request created successfully.', 'success')
 
-        # Send notification to all SA team members
+        # Send email notification to SA team
         sa_team = Team.query.filter_by(name='SA').first()
         if sa_team:
             sa_users = User.query.filter_by(team_id=sa_team.id).all()
-            for user in sa_users:
-                notification = Notification(
-                    user_id=user.id,
-                    message=f'New migration request: {migration.title}',
-                    migration_id=migration.id
-                )
-                db.session.add(notification)
-            db.session.commit()
+            recipients = [user.email for user in sa_users if user.email]
+            # Add test email
+            recipients.append('thaktechin.bo.64@ubu.ac.th')
             
-            # Emit socket event
-            socketio.emit('new_notification', {
-                'message': f'New migration request: {migration.title}',
-                'migration_id': migration.id
-            }, room='sa_team')
+            print(f"Sending email to: {recipients}")  # Debug print
+            
+            # Ensure all required template variables are available
+            template_data = {
+                'migration': migration,
+                'creator': current_user,
+                'view_url': url_for('view_migration', id=migration.id, _external=True)
+            }
+            
+            send_notification_email(
+                recipients=recipients,
+                subject=f'New Migration Request: {migration.title}',
+                template_name='new_migration',
+                **template_data
+            )
 
         return redirect(url_for('index'))
 
@@ -416,6 +462,27 @@ def update_migration_status(id):
         
         db.session.commit()
         log_action(migration.id, current_user.id, f'status_updated', f'Status changed to {new_status}')
+        
+        # Send email notification to SD team member
+        if new_status in ['completed', 'rollback']:
+            creator = User.query.get(migration.created_by)
+            if creator and creator.email:
+                recipients = [creator.email, 'thaktechin.bo.64@ubu.ac.th']
+                
+                template_data = {
+                    'migration': migration,
+                    'updater': current_user,
+                    'new_status': new_status,
+                    'view_url': url_for('view_migration', id=migration.id, _external=True)
+                }
+                
+                send_notification_email(
+                    recipients=recipients,
+                    subject=f'Migration Status Update: {migration.title}',
+                    template_name='status_update',
+                    **template_data
+                )
+                print(f"Sending email to: {recipients}")  # Debug print
         flash(f'Migration status updated to {new_status}', 'success')
     
     return redirect(url_for('view_migration', id=id))
@@ -525,6 +592,8 @@ def search():
     # Get search parameters
     search_query = request.args.get('search', '')
     status_filter = request.args.get('status', '')
+    page = request.args.get('page', 1, type=int)
+    per_page = 10  # Number of items per page
     
     # Base query
     query = Migration.query
@@ -549,8 +618,12 @@ def search():
             )
         )
 
-    # Order by completion date
-    migrations = query.order_by(Migration.completed_at.desc()).all()
+    # Order by completion date and paginate
+    migrations = query.order_by(Migration.completed_at.desc()).paginate(
+        page=page,
+        per_page=per_page,
+        error_out=False
+    )
     
     return render_template('search.html', migrations=migrations)
 
