@@ -1,44 +1,98 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Inter', sans-serif;
             line-height: 1.6;
-            color: #333;
+            color: #374151;
+            background-color: #f3f4f6;
+            margin: 0;
+            padding: 0;
         }
         .container {
             max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
+            margin: 40px auto;
+            background-color: #ffffff;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
         }
         .header {
-            background-color: #4CAF50;
+            background-color: #F1653F;
             color: white;
-            padding: 20px;
+            padding: 32px 24px;
             text-align: center;
-            border-radius: 5px 5px 0 0;
+        }
+        .header h2 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+            letter-spacing: -0.025em;
         }
         .content {
-            background-color: #f9f9f9;
-            padding: 20px;
-            border: 1px solid #ddd;
-            border-radius: 0 0 5px 5px;
+            padding: 32px 24px;
+            background-color: #ffffff;
+        }
+        .greeting {
+            font-size: 16px;
+            color: #4B5563;
+            margin-bottom: 24px;
+        }
+        .details {
+            background-color: #F9FAFB;
+            border: 1px solid #E5E7EB;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 24px 0;
+        }
+        .details h3 {
+            color: #111827;
+            font-size: 18px;
+            font-weight: 600;
+            margin-top: 0;
+            margin-bottom: 16px;
+        }
+        .detail-item {
+            margin-bottom: 12px;
+        }
+        .detail-label {
+            font-weight: 500;
+            color: #6B7280;
+        }
+        .detail-value {
+            color: #111827;
         }
         .button {
             display: inline-block;
-            padding: 10px 20px;
-            background-color: #4CAF50;
+            padding: 12px 24px;
+            background-color: #F1653F;
             color: white;
             text-decoration: none;
-            border-radius: 5px;
-            margin-top: 20px;
+            border-radius: 8px;
+            font-weight: 500;
+            margin-top: 24px;
+            transition: background-color 0.2s ease;
         }
-        .details {
-            margin: 20px 0;
-            padding: 15px;
-            background-color: white;
-            border-radius: 5px;
+        .button:hover {
+            background-color: #E05A35;
+        }
+        .footer {
+            padding-top: 24px;
+            border-top: 1px solid #E5E7EB;
+            margin-top: 24px;
+            color: #6B7280;
+            font-size: 14px;
+        }
+        @media (max-width: 640px) {
+            .container {
+                margin: 0;
+                border-radius: 0;
+            }
         }
     </style>
 </head>
@@ -48,22 +102,40 @@
             <h2>New Migration Request</h2>
         </div>
         <div class="content">
-            <p>Hello SA Team,</p>
-            <p>A new migration request has been created by {{ creator.username }}.</p>
+            <div class="greeting">
+                <p>Hello SA Team,</p>
+                <p>A new migration request has been created by <strong>{{ creator.username }}</strong>.</p>
+            </div>
             
             <div class="details">
-                <h3>Migration Details:</h3>
-                <p><strong>Title:</strong> {{ migration.title }}</p>
-                <p><strong>Customer:</strong> {{ migration.customer_name }}</p>
-                <p><strong>Description:</strong> {{ migration.description }}</p>
+                <h3>Migration Details</h3>
+                <div class="detail-item">
+                    <span class="detail-label">Title:</span>
+                    <span class="detail-value">{{ migration.title }}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Customer:</span>
+                    <span class="detail-value">{{ migration.customer_name }}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Description:</span>
+                    <span class="detail-value">{{ migration.description }}</span>
+                </div>
                 {% if migration.scheduled_date %}
-                <p><strong>Scheduled Date:</strong> {{ migration.scheduled_date.strftime('%Y-%m-%d %H:%M') }}</p>
+                <div class="detail-item">
+                    <span class="detail-label">Scheduled Date:</span>
+                    <span class="detail-value">{{ migration.scheduled_date.strftime('%Y-%m-%d %H:%M') }}</span>
+                </div>
                 {% endif %}
             </div>
             
-            <a href="{{ view_url }}" class="button">View Migration</a>
+            <center>
+                <a href="{{ view_url }}" class="button">View Migration</a>
+            </center>
             
-            <p>Best regards,<br>Migration Tracker System</p>
+            <div class="footer">
+                <p>Best regards,<br>Migration Tracker System</p>
+            </div>
         </div>
     </div>
 </body>

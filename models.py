@@ -51,7 +51,7 @@ class Migration(db.Model):
     customer_name = db.Column(db.String(100), nullable=False)
     customer_contact = db.Column(db.String(200))
     status = db.Column(db.String(50), nullable=False, default='waiting')  # waiting, acknowledged, in_progress, completed
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
     updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
     created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     assigned_to = db.Column(db.Integer, db.ForeignKey('user.id'))
@@ -59,6 +59,7 @@ class Migration(db.Model):
     completed_at = db.Column(db.DateTime)
     files = db.relationship('MigrationFile', backref='migration', lazy=True)
     scheduled_date = db.Column(db.DateTime, nullable=True)
+    is_deleted = db.Column(db.Boolean, default=False)
 
 class MigrationFile(db.Model):
     id = db.Column(db.Integer, primary_key=True)

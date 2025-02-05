@@ -255,6 +255,62 @@
 
     // Initial load
     document.addEventListener('DOMContentLoaded', loadNotifications);
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Connect to Socket.IO server
+        const socket = io();
+        
+        // Handle new notifications
+        socket.on('new_notification', function(data) {
+            // Update notification count
+            const countElement = document.getElementById('notification-count');
+            if (countElement) {
+                const currentCount = parseInt(countElement.textContent || '0');
+                countElement.textContent = currentCount + 1;
+            }
+            
+            // Add new notification to list if it exists
+            const notificationList = document.getElementById('notification-list');
+            if (notificationList) {
+                const newNotification = document.createElement('div');
+                newNotification.className = 'notification-item';
+                newNotification.innerHTML = `
+                    <a href="/migration/${data.migration_id}" class="block px-4 py-2 hover:bg-gray-100">
+                        <p class="text-sm text-gray-700">${data.message}</p>
+                        <p class="text-xs text-gray-500">${data.created_at}</p>
+                    </a>
+                `;
+                notificationList.insertBefore(newNotification, notificationList.firstChild);
+            }
+            
+            // Show notification toast
+            const toast = document.createElement('div');
+            toast.className = 'fixed bottom-4 right-4 bg-white shadow-lg rounded-lg p-4 mb-4 border-l-4 border-blue-500';
+            toast.innerHTML = `
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z"/>
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm font-medium text-gray-900">${data.message}</p>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(toast);
+            
+            // Remove toast after 5 seconds
+            setTimeout(() => {
+                toast.remove();
+            }, 5000);
+        });
+        
+        // Handle connection error
+        socket.on('connect_error', function(error) {
+            console.error('Socket.IO connection error:', error);
+        });
+    });
   </script>
 </body>
 </html>

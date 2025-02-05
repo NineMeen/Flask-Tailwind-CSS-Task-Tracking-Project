@@ -2,9 +2,9 @@ from gevent import monkey
 monkey.patch_all()
 
 # Now import other modules
-from flask import Flask, render_template, request, redirect, url_for, flash, send_file, jsonify, render_template_string
+from flask import Flask, render_template, request, redirect, url_for, flash, send_file, jsonify, render_template_string, current_app, abort
 from flask_login import LoginManager, login_required, current_user, login_user, logout_user
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO, emit, join_room, leave_room
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import os
@@ -16,6 +16,11 @@ from sqlalchemy.pool import NullPool
 from flask_wtf import FlaskForm
 from flask_mail import Mail, Message
 from jinja2 import Template
+import traceback
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+import io
+from pytz import timezone
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key'  # Change this in production
@@ -38,6 +43,8 @@ app.config['MAIL_DEFAULT_SENDER'] = 'no-reply-worktracking@symphony.net.th'  # C
 
 mail = Mail(app)
 
+
+socketio = SocketIO(app)
 # Initialize extensions
 db.init_app(app)
 migrate = Migrate(app, db)
@@ -53,6 +60,9 @@ LDAP_BASE_DN = 'OU=WorkTracking,DC=test,DC=net,DC=th'
 
 # Initialize SocketIO
 socketio = SocketIO(app, async_mode='gevent')
+
+# At the top of your app.py
+TIMEZONE = timezone('Asia/Bangkok')  # Set to your timezone
 
 @socketio.on('disconnect')
 def handle_disconnect():
@@ -175,15 +185,15 @@ def send_notification_email(recipients, subject, template_name, **kwargs):
 @login_required
 def index():
     if current_user.team.name == 'SD':
-        migrations = Migration.query.filter_by(created_by=current_user.id).all()
+        migrations = Migration.query.filter_by(created_by=current_user.id).filter_by(is_deleted=False).all()
     elif current_user.team.name in ['SA', 'NS']:
         migrations = Migration.query.filter(
             (Migration.status != 'completed') & 
             ((Migration.assigned_to == current_user.id) | 
              (Migration.assigned_to == None))
-        ).all()
+        ).filter_by(is_deleted=False).all()
     else:  # Admin
-        migrations = Migration.query.all()
+        migrations = Migration.query.filter_by(is_deleted=False).all()
     
     return render_template('task/task.html', migrations=migrations ,User=User)
 
@@ -323,6 +333,7 @@ def create_migration():
         else:
             scheduled_datetime = None
 
+        # Create new migration with current timestamp
         migration = Migration(
             title=request.form['title'],
             description=request.form['description'],
@@ -330,8 +341,10 @@ def create_migration():
             customer_contact=request.form['customer_contact'],
             created_by=current_user.id,
             status='waiting',
-            scheduled_date=scheduled_datetime
+            scheduled_date=scheduled_datetime,
+            created_at=datetime.now(TIMEZONE)  # Add current timestamp
         )
+        
         db.session.add(migration)
         db.session.commit()
 
@@ -351,38 +364,42 @@ def create_migration():
                     migration_id=migration.id,
                     filename=filename,
                     file_path=file_path,
-                    file_type='attachment'
+                    file_type='attachment',
+                    uploaded_at=datetime.now(TIMEZONE)  # Add timestamp for files too
                 )
                 db.session.add(migration_file)
+
         
         db.session.commit()
         log_action(migration.id, current_user.id, 'created')
-        flash('Migration request created successfully.', 'success')
 
-        # Send email notification to SA team
+        # Create notification for SA team members
         sa_team = Team.query.filter_by(name='SA').first()
         if sa_team:
-            sa_users = User.query.filter_by(team_id=sa_team.id).all()
-            recipients = [user.email for user in sa_users if user.email]
-            # Add test email
-            recipients.append('thaktechin.bo.64@ubu.ac.th')
+            sa_users = User.query.filter_by(team_id=sa_team.id, is_active=True).all()
+            for sa_user in sa_users:
+                notification = Notification(
+                    user_id=sa_user.id,
+                    message=f'New migration request: {migration.title}',
+                    migration_id=migration.id,
+                    created_at=datetime.now(TIMEZONE)
+                )
+                db.session.add(notification)
             
-            print(f"Sending email to: {recipients}")  # Debug print
-            
-            # Ensure all required template variables are available
-            template_data = {
-                'migration': migration,
-                'creator': current_user,
-                'view_url': url_for('view_migration', id=migration.id, _external=True)
-            }
-            
-            send_notification_email(
-                recipients=recipients,
-                subject=f'New Migration Request: {migration.title}',
-                template_name='new_migration',
-                **template_data
-            )
+            try:
+                db.session.commit()
+                # Emit socket event for real-time notification
+                socketio.emit('new_notification', {
+                    'message': f'New migration request: {migration.title}',
+                    'migration_id': migration.id,
+                    'created_at': datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')
+                }, room='sa_team')
+                
+            except Exception as e:
+                print(f"Error creating notifications: {str(e)}")
+                db.session.rollback()
 
+        flash('Migration request created successfully.', 'success')
         return redirect(url_for('index'))
 
     return render_template('migration/create.html')
@@ -406,8 +423,9 @@ def acknowledge_migration(id):
 
     migration = Migration.query.get_or_404(id)
     migration.status = 'acknowledged'
-    migration.acknowledged_at = datetime.utcnow()
+    migration.acknowledged_at = datetime.now(TIMEZONE)
     db.session.commit()
+
 
     log_action(migration.id, current_user.id, 'acknowledged')
     flash('Migration acknowledged successfully.', 'success')
@@ -441,7 +459,7 @@ def update_migration_status(id):
     
     if new_status in ['completed', 'rollback', 'in_progress']:
         migration.status = new_status
-        migration.completed_at = datetime.utcnow()
+        migration.completed_at = datetime.now(TIMEZONE)
         
         # Handle result file upload
         if 'result_file' in request.files:
@@ -467,7 +485,10 @@ def update_migration_status(id):
         if new_status in ['completed', 'rollback']:
             creator = User.query.get(migration.created_by)
             if creator and creator.email:
-                recipients = [creator.email, 'thaktechin.bo.64@ubu.ac.th']
+                recipients = [creator.email]
+                # Add test emails one by one
+                recipients.append('thaktechin.bo.64@ubu.ac.th')
+                recipients.append('patthamakm54@gmail.com')
                 
                 template_data = {
                     'migration': migration,
@@ -505,10 +526,41 @@ def download_file(file_id):
 def team_page():
     if current_user.team.name == 'SA' or current_user.team.name == 'SD':
         team_members = User.query.filter_by(team_id=current_user.team_id).all()
-        migrations = Migration.query.filter_by(status='in_progress').all()
-        return render_template('task/team.html', team_members=team_members, migrations=migrations,User=User)
+        
+        # Get selected member from query parameter
+        selected_member_id = request.args.get('member_id', type=int)
+        
+        # Get migrations based on selection
+        if selected_member_id:
+            if current_user.team.name == 'SA':
+                migrations = Migration.query.filter(
+                    Migration.status.in_(['in_progress', 'waiting', 'acknowledged']),
+                    Migration.assigned_to == selected_member_id
+                ).filter_by(is_deleted=False).all()
+            else:  # SD team
+                migrations = Migration.query.filter(
+                    Migration.status.in_(['in_progress', 'waiting', 'acknowledged']),
+                    Migration.created_by == selected_member_id
+                ).filter_by(is_deleted=False).all()
+        else:
+            # Show all active tasks if no member selected
+            if current_user.team.name == 'SA':
+                migrations = Migration.query.filter(
+                    Migration.status.in_(['in_progress', 'waiting', 'acknowledged'])
+                ).filter_by(is_deleted=False).all()
+            else:  # SD team
+                migrations = Migration.query.filter(
+                    Migration.status.in_(['in_progress', 'waiting', 'acknowledged']),
+                    Migration.created_by.in_([member.id for member in team_members])
+                ).filter_by(is_deleted=False).all()
+        
+        return render_template('task/team.html', 
+                             team_members=team_members, 
+                             migrations=migrations,
+                             selected_member_id=selected_member_id,
+                             User=User)
     else:
-        flash('Access denied. Only SA team members can view this page.', 'error')
+        flash('Access denied. Only SA and SD team members can view this page.', 'error')
         return redirect(url_for('index'))
 
 # Initialize the database
@@ -596,7 +648,7 @@ def search():
     per_page = 10  # Number of items per page
     
     # Base query
-    query = Migration.query
+    query = Migration.query.filter_by(is_deleted=False)
 
     # Apply status filter if specified
     if status_filter:
@@ -668,9 +720,17 @@ def mark_all_notifications_read():
 # Socket.IO event handlers
 @socketio.on('connect')
 def handle_connect():
-    if current_user.is_authenticated and current_user.team.name == 'SA':
-        socketio.emit('join', {'room': 'sa_team'})
+    if current_user.is_authenticated:
+        if current_user.team.name == 'SA':
+            join_room('sa_team')
+            print(f"User {current_user.username} joined SA team room")
 
+@socketio.on('disconnect')
+def handle_disconnect():
+    if current_user.is_authenticated:
+        if current_user.team.name == 'SA':
+            leave_room('sa_team')
+            print(f"User {current_user.username} left SA team room")
 
 @app.route('/migration/<int:id>/edit-page')
 @login_required
@@ -774,29 +834,14 @@ def delete_migration(id):
         return redirect(url_for('index'))
 
     try:
-        # Delete associated files from storage
-        migration_files = MigrationFile.query.filter_by(migration_id=id).all()
-        for file in migration_files:
-            if os.path.exists(file.file_path):
-                os.remove(file.file_path)
-            db.session.delete(file)
-
-        # Delete the migration folder if it exists
-        migration_folder = os.path.join(app.config['UPLOAD_FOLDER'], f'migration_{migration.id}')
-        if os.path.exists(migration_folder):
-            os.rmdir(migration_folder)
-
-        # Delete associated logs
-        MigrationLog.query.filter_by(migration_id=id).delete()
-        
-        # Delete associated notifications
-        Notification.query.filter_by(migration_id=id).delete()
-
-        # Delete the migration
-        db.session.delete(migration)
+        # Instead of deleting, mark as deleted
+        migration.is_deleted = True
+        migration.status = 'deleted'  # Optional: add a deleted status
         db.session.commit()
 
         flash('Migration deleted successfully.', 'success')
+        log_action(migration.id, current_user.id, 'deleted', 'Migration marked as deleted')
+        
     except Exception as e:
         db.session.rollback()
         flash('Error deleting migration.', 'error')
@@ -812,7 +857,7 @@ def dashboard():
     end_date = request.args.get('end_date')
 
     # Create base query
-    base_query = Migration.query
+    base_query = Migration.query.filter_by(is_deleted=False)
 
     # Apply date filtering if dates are provided
     if start_date and end_date:
@@ -1006,6 +1051,209 @@ def delete_migration_files(id):
     
     return redirect(url_for('edit_migration_page', id=id))
 
+@app.errorhandler(500)
+def internal_server_error(e):
+    # Log the error details
+    app.logger.error(f'Server Error: {e}')
+    
+    # In development, we might want to see the error details
+    if current_app.config['DEBUG']:
+        # Still show our custom 500 page but include error details
+        error_details = {
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }
+        return render_template('admin/500.html', error_details=error_details), 500
+    
+    # In production, just show the generic error page
+    return render_template('admin/500.html'), 500
+
+# 403 Forbidden
+@app.errorhandler(403)
+def forbidden_error(e):
+    app.logger.error(f'Forbidden: {e}')
+    return render_template('admin/403.html'), 403
+
+
+# 401 Unauthorized
+@app.errorhandler(401)
+def unauthorized_error(e):
+    app.logger.error(f'Unauthorized: {e}')
+    return render_template('admin/401.html'), 401
+
+@app.route('/test-500')
+def test_500():
+    # Simulate a server error
+    raise Exception("Test 500 error")
+
+@app.route('/test-403')
+def test_403():
+    abort(403)
+
+@app.route('/test-401')
+def test_401():
+    abort(401)
+
+@app.route('/export-statistics')
+@login_required
+def export_statistics():
+    # Get date range from query parameters
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    
+    # Create base query
+    base_query = Migration.query.filter_by(is_deleted=False)
+    
+    # Apply date filter if provided
+    if start_date and end_date:
+        try:
+            # Add time components to make the range inclusive
+            start = datetime.strptime(start_date, '%Y-%m-%d')
+            end = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)  # Include the end date
+            base_query = base_query.filter(Migration.created_at.between(start, end))
+        except ValueError:
+            flash('Invalid date format', 'error')
+    
+    # Create workbook and select active sheet for SA Team Statistics
+    wb = Workbook()
+    ws1 = wb.active
+    ws1.title = "SA Team Statistics"
+    
+    # Create second sheet for Total Migrations
+    ws2 = wb.create_sheet("Total Migrations")
+    
+    # Define styles
+    header_fill = PatternFill(start_color="F1653F", end_color="F1653F", fill_type="solid")
+    header_font = Font(color="FFFFFF", bold=True)
+    border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
+    )
+    
+    # Sheet 1: SA Team Statistics
+    headers1 = [
+        "Team Member", 
+        "Total Assigned", 
+        "Completed", 
+        "Rollback",
+        "In Progress",
+        "Waiting",
+        "Acknowledged"
+    ]
+    
+    for col, header in enumerate(headers1, 1):
+        cell = ws1.cell(row=1, column=col)
+        cell.value = header
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.border = border
+        cell.alignment = Alignment(horizontal='center')
+    
+    # Get SA team members
+    sa_team = Team.query.filter_by(name='SA').first()
+    sa_members = User.query.filter_by(team_id=sa_team.id).all()
+    
+    # Write data for each SA member
+    row = 2
+    for member in sa_members:
+        # Get statistics for this member
+        total = base_query.filter_by(assigned_to=member.id).count()
+        completed = base_query.filter_by(assigned_to=member.id, status='completed').count()
+        rollback = base_query.filter_by(assigned_to=member.id, status='rollback').count()
+        in_progress = base_query.filter_by(assigned_to=member.id, status='in_progress').count()
+        waiting = base_query.filter_by(assigned_to=member.id, status='waiting').count()
+        acknowledged = base_query.filter_by(assigned_to=member.id, status='acknowledged').count()
+        
+        # Write member data
+        ws1.cell(row=row, column=1, value=member.username).border = border
+        ws1.cell(row=row, column=2, value=total).border = border
+        ws1.cell(row=row, column=3, value=completed).border = border
+        ws1.cell(row=row, column=4, value=rollback).border = border
+        ws1.cell(row=row, column=5, value=in_progress).border = border
+        ws1.cell(row=row, column=6, value=waiting).border = border
+        ws1.cell(row=row, column=7, value=acknowledged).border = border
+        
+        row += 1
+    
+    # Add totals row
+    ws1.cell(row=row, column=1, value="TOTAL").font = Font(bold=True)
+    for col in range(2, 8):
+        ws1.cell(row=row, column=col, value=f"=SUM({chr(64+col)}2:{chr(64+col)}{row-1})").font = Font(bold=True)
+    
+    # Sheet 2: Total Migrations Statistics
+    headers2 = [
+        "Status",
+        "Count",
+        "Percentage"
+    ]
+    
+    for col, header in enumerate(headers2, 1):
+        cell = ws2.cell(row=1, column=col)
+        cell.value = header
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.border = border
+        cell.alignment = Alignment(horizontal='center')
+    
+    # Get total statistics
+    total_migrations = base_query.count()
+    statuses = ['completed', 'rollback', 'in_progress', 'waiting', 'acknowledged']
+    
+    row = 2
+    for status in statuses:
+        count = base_query.filter_by(status=status).count()
+        percentage = (count / total_migrations * 100) if total_migrations > 0 else 0
+        
+        # Write status data
+        ws2.cell(row=row, column=1, value=status.title()).border = border
+        ws2.cell(row=row, column=2, value=count).border = border
+        ws2.cell(row=row, column=3, value=f"{percentage:.1f}%").border = border
+        row += 1
+    
+    # Add total row
+    ws2.cell(row=row, column=1, value="TOTAL").font = Font(bold=True)
+    ws2.cell(row=row, column=2, value=total_migrations).font = Font(bold=True)
+    ws2.cell(row=row, column=3, value="100%").font = Font(bold=True)
+    
+    # Add date range info to both sheets if provided
+    if start_date and end_date:
+        ws1.cell(row=row+2, column=1, value=f"Date Range: {start_date} to {end_date}")
+        ws2.cell(row=row+2, column=1, value=f"Date Range: {start_date} to {end_date}")
+    
+    # Adjust column widths for both sheets
+    for ws in [ws1, ws2]:
+        for col in ws.columns:
+            max_length = 0
+            column = col[0].column_letter
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = (max_length + 2)
+            ws.column_dimensions[column].width = adjusted_width
+    
+    # Save to BytesIO
+    excel_file = io.BytesIO()
+    wb.save(excel_file)
+    excel_file.seek(0)
+    
+    # Generate filename with date
+    filename = f"migration_statistics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    
+    return send_file(
+        excel_file,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=filename
+    )
+
 if __name__ == "__main__":
+    # Set debug to False to see the 500 error page
+    app.config['DEBUG'] = True
+
     app.run(debug=True, host='0.0.0.0', port=5000)
     #socketio.run(app, host='0.0.0.0', port=5000)

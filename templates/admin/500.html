@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>500 - Internal Server Error</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 h-screen">
+    <div class="min-h-screen flex items-center justify-center">
+        <div class="max-w-md w-full px-6 py-8">
+            <div class="bg-white rounded-lg shadow-xl overflow-hidden">
+                <div class="p-6">
+                    <div class="text-center">
+                        <!-- Error Icon -->
+                        <div class="mx-auto mb-4">
+                            <svg class="w-24 h-24 text-red-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                            </svg>
+                        </div>
+                        
+                        <!-- Error Message -->
+                        <h1 class="text-4xl font-bold text-gray-800 mb-4">500</h1>
+                        <h2 class="text-2xl font-semibold text-gray-600 mb-2">Internal Server Error</h2>
+                        <p class="text-gray-500 mb-8">
+                            Oops! Something went wrong on our end. We're working to fix it.
+                        </p>
+                        
+                        <!-- Debug Information (only shown in development) -->
+                        {% if error_details and config['DEBUG'] %}
+                        <div class="mt-8 text-left">
+                            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                                <h3 class="text-red-800 font-semibold mb-2">Debug Information:</h3>
+                                <pre class="text-xs text-red-700 overflow-x-auto">
+                                Error: {{ error_details.error }}
+
+          Traceback:
+                                    {{ error_details.traceback }}
+                                </pre>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Action Buttons -->
+                        <div class="space-y-4">
+                            <button onclick="window.location.reload()" 
+                                    class="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200">
+                                Try Again
+                            </button>
+                            
+                            <a href="{{ url_for('index') }}" 
+                               class="block w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg transition duration-200">
+                                Return to Homepage
+                            </a>
+                        </div>
+                        
+                        <!-- Support Info -->
+                        <div class="mt-8 text-sm text-gray-500">
+                            <p>If the problem persists, please contact support:</p>
+                            <p class="font-medium">support@symphony.net.th</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Footer -->
+                <div class="px-6 py-4 bg-gray-50 border-t border-gray-100">
+                    <p class="text-xs text-center text-gray-500">
+                        Error Code: 500 | {{ request.url }}
+                        {% if config['DEBUG'] %}
+                        <br>
+                        <span class="text-yellow-600">(Debug Mode Enabled)</span>
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Optional: Add automatic refresh -->
+    <script>
+        // Automatically refresh the page after 30 seconds
+        setTimeout(function() {
+            window.location.reload();
+        }, 30000);
+
+        // Show countdown timer
+        let timeLeft = 30;
+        const timerElement = document.createElement('div');
+        timerElement.className = 'text-sm text-gray-400 text-center mt-4';
+        timerElement.innerHTML = `Auto-refreshing in ${timeLeft} seconds...`;
+        document.querySelector('.max-w-md').appendChild(timerElement);
+
+        const timer = setInterval(function() {
+            timeLeft--;
+            timerElement.innerHTML = `Auto-refreshing in ${timeLeft} seconds...`;
+            if (timeLeft <= 0) {
+                clearInterval(timer);
+            }
+        }, 1000);
+    </script>
+</body>
+</html>
